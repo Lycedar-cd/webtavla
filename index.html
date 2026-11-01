@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerçekçi Web Tavla Oyunu</title>
+    <!-- Socket.io (yalnızca Node.js sunucusu ile çalışır) -->
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background: radial-gradient(circle at center, #2c1d11 0%, #0f0a06 100%);
+            color: #f3e5ab;
+            user-select: none;
+        }
+        .title-font { font-family: 'Cinzel', serif; }
+
+        /* Tailwind'de grid-cols-13 yok, elle tanımlandı */
+        .grid-cols-13 { grid-template-columns: repeat(13, minmax(0, 1fr)); }
+
+        .wood-border {
+            background: linear-gradient(135deg, #4a2c11 0%, #2b1808 50%, #190d04 100%);
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.8), 0 15px 35px rgba(0,0,0,0.9);
+            border: 12px solid #361f0c;
+        }
+        .board-surface {
+            background: radial-gradient(circle at center, #d4a373 0%, #bc8a5f 70%, #a47148 100%);
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.6);
+        }
+        .board-divider {
+            background: linear-gradient(to right, #1f1106, #3d230d, #1f1106);
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.9);
+        }
+
+        .triangle-down-dark { clip-path: polygon(0 0, 100% 0, 50% 100%); background: linear-gradient(to bottom, #5c2018, #3b110b); }
+        .triangle-down-light { clip-path: polygon(0 0, 100% 0, 50% 100%); background: linear-gradient(to bottom, #e9c46a, #c69d41); }
+        .triangle-up-dark { clip-path: polygon(0 100%, 100% 100%, 50% 0); background: linear-gradient(to top, #5c2018, #3b110b); }
+        .triangle-up-light { clip-path: polygon(0 100%, 100% 100%, 50% 0); background: linear-gradient(to top, #e9c46a, #c69d41); }
+
+        .point-highlight { filter: drop-shadow(0 0 8px rgba(74, 222, 128, 0.9)); cursor: pointer; }
+
+        .checker {
+            width: 38px; height: 38px; border-radius: 50%;
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 0.85rem;
+            position: relative; flex-shrink: 0; margin-top: -12px;
+        }
+        .checker:first-child { margin-top: 0; }
+
+        .checker-white {
+            background: radial-gradient(circle at 35% 35%, #ffffff 0%, #e6e6e6 50%, #b3b3b3 100%);
+            border: 2px solid #ffffff;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.5), inset 0 -2px 4px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.8);
+            color: #333;
+        }
+        .checker-black {
+            background: radial-gradient(circle at 35% 35%, #444444 0%, #222222 50%, #050505 100%);
+            border: 2px solid #555555;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.6), inset 0 -2px 4px rgba(0,0,0,0.8), inset 0 2px 4px rgba(255,255,255,0.3);
+            color: #fff;
+        }
+        .checker.selected {
+            transform: scale(1.15);
+            box-shadow: 0 0 12px #4ade80, inset 0 0 6px #4ade80 !important;
+            border-color: #4ade80 !important;
+            z-index: 30;
+        }
+
+        .dice {
+            width: 42px; height: 42px;
+            background: radial-gradient(circle at 30% 30%, #ffffff, #e0e0e0);
+            border-radius: 8px;
+            box-shadow: 0 5px 10px rgba(0,0,0,0.5), inset 0 -2px 3px rgba(0,0,0,0.2);
+            display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr);
+            padding: 5px; gap: 2px;
+        }
+        .dot {
+            width: 7px; height: 7px; background-color: #111; border-radius: 50%;
+            justify-self: center; align-self: center;
+            box-shadow: inset 0 1px 1px rgba(0,0,0,0.8);
+        }
+        .dice-rolling { animation: roll 0.6s ease-out; }
+        @keyframes roll {
+            0% { transform: rotate(0deg) scale(0.6); }
+            50% { transform: rotate(180deg) scale(1.2); }
+            100% { transform: rotate(360deg) scale(1); }
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); }
+        ::-webkit-scrollbar-thumb { background: #a47148; border-radius: 3px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between p-2 md:p-6">
+
+    <!-- HEADER -->
+    <header class="max-w-7xl w-full mx-auto bg-black/40 backdrop-blur-md rounded-2xl p-4 border border-amber-900/40 shadow-2xl flex flex-wrap items-center justify-between gap-4 mb-4">
+        <div class="flex items-center gap-3">
+            <i class="fa-solid fa-dice-d6 text-3xl text-amber-500"></i>
+            <div>
+                <h1 class="text-2xl font-bold title-font tracking-wider text-amber-400">GELENEKSEL TAVLA</h1>
+                <p class="text-xs text-amber-200/60">Node.js & Socket.io Online Tavla</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-6 bg-black/50 px-6 py-2 rounded-xl border border-amber-800/30">
+            <div id="player1-card" class="flex items-center gap-3 transition-all duration-300">
+                <div class="w-6 h-6 rounded-full checker-white border border-gray-400 shadow"></div>
+                <div>
+                    <div class="text-xs font-semibold text-gray-300">OYUNCU 1 (Beyaz)</div>
+                    <div class="text-sm font-bold text-amber-400" id="p1-score">Toplanan: 0/15</div>
+                </div>
+            </div>
+            <div class="h-8 w-px bg-amber-900/50"></div>
+            <div id="player2-card" class="flex items-center gap-3 opacity-50 transition-all duration-300">
+                <div class="w-6 h-6 rounded-full checker-black border border-gray-600 shadow"></div>
+                <div>
+                    <div class="text-xs font-semibold text-gray-300">OYUNCU 2 (Siyah)</div>
+                    <div class="text-sm font-bold text-amber-400" id="p2-score">Toplanan: 0/15</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <button id="btn-roll" onclick="rollDice()" class="bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white font-bold px-6 py-2.5 rounded-xl shadow-lg border border-amber-400/30 transition-all duration-200 flex items-center gap-2 transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="fa-solid fa-dice text-lg"></i>
+                <span>ZAR AT</span>
+            </button>
+            <button onclick="initGame(true)" class="bg-stone-800 hover:bg-stone-700 text-amber-200 p-2.5 rounded-xl border border-amber-900/40 transition" title="Yeniden Başlat">
+                <i class="fa-solid fa-rotate-right"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN -->
+    <main class="max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-4 gap-6 items-start flex-grow">
+
+        <div class="lg:col-span-3 wood-border rounded-2xl p-3 md:p-5 relative shadow-2xl">
+            <div class="absolute top-1/2 -left-3 w-3 h-12 bg-amber-600 rounded-l border border-amber-800 shadow transform -translate-y-1/2"></div>
+            <div class="absolute top-1/2 -right-3 w-3 h-12 bg-amber-600 rounded-r border border-amber-800 shadow transform -translate-y-1/2"></div>
+
+            <div class="board-surface rounded-xl p-3 border border-amber-950/60 flex flex-col justify-between h-[520px] relative">
+
+                <!-- ÜST YARI -->
+                <div class="grid grid-cols-13 gap-0 h-[220px] w-full">
+                    <div class="col-span-6 grid grid-cols-6 h-full border-r border-amber-950/40" id="top-left-board"></div>
+                    <div class="col-span-1 board-divider flex flex-col items-center justify-start py-2 z-10" id="bar-top">
+                        <div id="bar-p1" class="w-full flex flex-col items-center gap-1"></div>
+                    </div>
+                    <div class="col-span-6 grid grid-cols-6 h-full border-l border-amber-950/40" id="top-right-board"></div>
+                </div>
+
+                <!-- ZARLAR -->
+                <div class="w-full flex items-center justify-center my-1 relative z-20">
+                    <div id="dice-container" class="flex gap-4 items-center justify-center bg-black/30 px-4 py-1.5 rounded-full border border-amber-900/30 min-h-[44px] min-w-[120px]"></div>
+                </div>
+
+                <!-- ALT YARI -->
+                <div class="grid grid-cols-13 gap-0 h-[220px] w-full">
+                    <div class="col-span-6 grid grid-cols-6 h-full border-r border-amber-950/40" id="bottom-left-board"></div>
+                    <div class="col-span-1 board-divider flex flex-col items-center justify-end py-2 z-10" id="bar-bottom">
+                        <div id="bar-p2" class="w-full flex flex-col items-center gap-1"></div>
+                    </div>
+                    <div class="col-span-6 grid grid-cols-6 h-full border-l border-amber-950/40" id="bottom-right-board"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SIDEBAR -->
+        <div class="flex flex-col gap-4 h-full">
+
+            <div class="bg-black/40 backdrop-blur-md rounded-2xl p-4 border border-amber-900/40 shadow-xl">
+                <h3 class="text-sm font-bold text-amber-400 mb-1 flex items-center gap-2">
+                    <i class="fa-solid fa-box-archive"></i> TOPLANAN TAŞLAR
+                </h3>
+                <p class="text-[11px] text-amber-200/50 mb-3">Taşını seç, sonra kendi kutusuna tıkla.</p>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div onclick="bearOff(1)" class="bg-stone-900/80 rounded-xl p-3 border border-amber-900/30 flex flex-col items-center cursor-pointer hover:border-amber-500/60 transition">
+                        <span class="text-xs text-gray-400 mb-2">Beyaz Oyuncu</span>
+                        <div id="off-p1" class="flex flex-wrap gap-1 min-h-[40px] justify-center items-center"></div>
+                    </div>
+                    <div onclick="bearOff(-1)" class="bg-stone-900/80 rounded-xl p-3 border border-amber-900/30 flex flex-col items-center cursor-pointer hover:border-amber-500/60 transition">
+                        <span class="text-xs text-gray-400 mb-2">Siyah Oyuncu</span>
+                        <div id="off-p2" class="flex flex-wrap gap-1 min-h-[40px] justify-center items-center"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-black/40 backdrop-blur-md rounded-2xl p-4 border border-amber-900/40 shadow-xl flex-grow flex flex-col justify-between">
+                <div>
+                    <h3 class="text-sm font-bold text-amber-400 mb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-list-ul"></i> HAMLE GEÇMİŞİ
+                    </h3>
+                    <div id="game-log" class="text-xs space-y-1.5 max-h-[180px] overflow-y-auto pr-1 text-gray-300">
+                        <div class="text-amber-200/60 italic">Oyuna başlamak için "Zar At" butonuna basın.</div>
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-3 border-t border-amber-900/30">
+                    <div class="text-xs text-gray-400">Kullanılabilir Hamleler:</div>
+                    <div id="available-moves" class="flex gap-2 mt-1 min-h-[28px]">
+                        <span class="text-xs italic text-gray-500">Zar bekleniyor...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="max-w-7xl w-full mx-auto text-center text-xs text-amber-200/40 mt-4">
+        C# Logic Mantığı ile Geliştirilmiş Web Tabanlı Tavla &copy; 2026
+        <div id="role-info" class="mt-1 text-amber-300"></div>
+    </footer>
+
+    <script>
+        // Socket.io sunucusu yoksa oyun yine de çalışsın
+        let clientId = sessionStorage.getItem('clientId');
+if (!clientId) {
+    clientId = Math.random().toString(36).slice(2);
+    sessionStorage.setItem('clientId', clientId);
+}
+const socket = (typeof io !== 'undefined') ? io({ auth: { clientId } }) : null;
+        let myColor = null;     // 1 Beyaz, -1 Siyah, null izleyici
+        let logHistory = [];
+        let rollId = 0;
+        let shownRollId = 0;
+
+        if (socket) {
+            socket.on('rol', (c) => { myColor = c; updateUI(); });
+            socket.on('durum', (st) => applyState(st));
+        }
+
+        function canAct() { return !socket || myColor === turn; }
+
+        function getState() {
+            return { board, turn, bar, off, dice, movesLeft, logHistory, rollId };
+        }
+
+        function syncState() {
+            if (socket) socket.emit('durum-gonder', getState());
+        }
+
+        function applyState(st) {
+            board = st.board; turn = st.turn; bar = st.bar; off = st.off;
+            dice = st.dice; movesLeft = st.movesLeft; logHistory = st.logHistory;
+            rollId = st.rollId;
+            selectedPoint = null;
+
+            renderLog();
+            if (rollId !== shownRollId) {
+                shownRollId = rollId;
+                if (dice.length) renderDiceVisuals();
+                else document.getElementById('dice-container').innerHTML = '';
+            }
+            renderBoard();
+            updateUI();
+        }
+
+        // Ses (Web Audio API)
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSound(type) {
+            try {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                const t = audioCtx.currentTime;
+
+                if (type === 'dice') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(150, t);
+                    osc.frequency.exponentialRampToValueAtTime(40, t + 0.1);
+                    gain.gain.setValueAtTime(0.3, t);
+                    gain.gain.linearRampToValueAtTime(0.01, t + 0.1);
+                    osc.start(); osc.stop(t + 0.1);
+                } else if (type === 'move') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(300, t);
+                    osc.frequency.exponentialRampToValueAtTime(120, t + 0.08);
+                    gain.gain.setValueAtTime(0.2, t);
+                    gain.gain.linearRampToValueAtTime(0.01, t + 0.08);
+                    osc.start(); osc.stop(t + 0.08);
+                } else if (type === 'hit') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(400, t);
+                    osc.frequency.linearRampToValueAtTime(100, t + 0.15);
+                    gain.gain.setValueAtTime(0.4, t);
+                    gain.gain.linearRampToValueAtTime(0.01, t + 0.15);
+                    osc.start(); osc.stop(t + 0.15);
+                }
+            } catch (e) { /* ses desteklenmiyor */ }
+        }
+
+        // OYUN DURUMU
+        let board = Array(24).fill(0);
+        let turn = 1; // 1: Beyaz, -1: Siyah
+        let bar = { p1: 0, p2: 0 };
+        let off = { p1: 0, p2: 0 };
+        let dice = [];
+        let movesLeft = [];
+        let selectedPoint = null; // null, 0-23 veya 'bar'
+
+        function initGame(shouldSync = false) {
+            board = Array(24).fill(0);
+
+            // Beyaz (+)
+            board[0] = 2; board[11] = 5; board[16] = 3; board[18] = 5;
+            // Siyah (-)
+            board[23] = -2; board[12] = -5; board[7] = -3; board[5] = -5;
+
+            turn = 1;
+            bar = { p1: 0, p2: 0 };
+            off = { p1: 0, p2: 0 };
+            dice = [];
+            movesLeft = [];
+            selectedPoint = null;
+
+            logHistory = [];
+            rollId = 0;
+            shownRollId = 0;
+
+            document.getElementById('dice-container').innerHTML = '';
+            log("Yeni oyun başlatıldı. Oyuncu 1 (Beyaz) başlar.");
+            renderBoard();
+            updateUI();
+            if (shouldSync) syncState();
+        }
+
+        // YARDIMCI FONKSİYONLAR
+        function barCount() { return turn === 1 ? bar.p1 : bar.p2; }
+        function isOwn(i) { return turn === 1 ? board[i] > 0 : board[i] < 0; }
+        function isBlocked(i) { return turn === 1 ? board[i] < -1 : board[i] > 1; }
+
+        // Tüm taşlar kendi evinde mi? (Beyaz: 18-23, Siyah: 0-5)
+        function canBearOff() {
+            if (barCount() > 0) return false;
+            for (let i = 0; i < 24; i++) {
+                if (!isOwn(i)) continue;
+                const inHome = turn === 1 ? i >= 18 : i <= 5;
+                if (!inHome) return false;
+            }
+            return true;
+        }
+
+        // Bu zarla bu taş dışarı alınabilir mi?
+        function bearOffValid(from, d) {
+            const need = turn === 1 ? 24 - from : from + 1;
+            if (d === need) return true;
+            if (d > need) {
+                // Daha uzakta taş varsa büyük zarla toplanamaz
+                if (turn === 1) {
+                    for (let i = 18; i < from; i++) if (board[i] > 0) return false;
+                } else {
+                    for (let i = from + 1; i <= 5; i++) if (board[i] < 0) return false;
+                }
+                return true;
+            }
+            return false;
+        }
+
+        // RENDER
+        function renderBoard() {
+            const topLeft = document.getElementById('top-left-board');
+            const topRight = document.getElementById('top-right-board');
+            const bottomLeft = document.getElementById('bottom-left-board');
+            const bottomRight = document.getElementById('bottom-right-board');
+
+            topLeft.innerHTML = ''; topRight.innerHTML = '';
+            bottomLeft.innerHTML = ''; bottomRight.innerHTML = '';
+
+            for (let i = 12; i <= 17; i++) topLeft.appendChild(createPointElement(i, 'down', i % 2 === 0 ? 'dark' : 'light'));
+            for (let i = 18; i <= 23; i++) topRight.appendChild(createPointElement(i, 'down', i % 2 === 0 ? 'dark' : 'light'));
+            for (let i = 11; i >= 6; i--) bottomLeft.appendChild(createPointElement(i, 'up', i % 2 === 0 ? 'light' : 'dark'));
+            for (let i = 5; i >= 0; i--) bottomRight.appendChild(createPointElement(i, 'up', i % 2 === 0 ? 'light' : 'dark'));
+
+            renderBar();
+            renderOff();
+        }
+
+        function createPointElement(index, direction, colorClass) {
+            const point = document.createElement('div');
+            point.className = `relative flex flex-col ${direction === 'down' ? 'justify-start' : 'justify-end'} items-center p-1 hover:brightness-110 transition cursor-pointer h-full`;
+            point.dataset.point = index;
+            point.onclick = () => handlePointClick(index);
+
+            const triangle = document.createElement('div');
+            triangle.className = `absolute inset-0 triangle-${direction}-${colorClass}`;
+            point.appendChild(triangle);
+
+            if (isValidMoveDestination(index)) {
+                point.classList.add('point-highlight');
+                const indicator = document.createElement('div');
+                indicator.className = `absolute ${direction === 'down' ? 'bottom-2' : 'top-2'} w-4 h-4 rounded-full bg-green-400 animate-ping z-20`;
+                point.appendChild(indicator);
+            }
+
+            const checkersCount = Math.abs(board[index]);
+            const checkerColor = board[index] > 0 ? 'white' : 'black';
+
+            if (checkersCount > 0) {
+                const stack = document.createElement('div');
+                stack.className = `relative z-10 w-full flex ${direction === 'down' ? 'flex-col' : 'flex-col-reverse'} items-center`;
+
+                const visibleCount = Math.min(checkersCount, 5);
+                for (let c = 0; c < visibleCount; c++) {
+                    const ch = document.createElement('div');
+                    ch.className = `checker checker-${checkerColor}`;
+                    if (selectedPoint === index && c === visibleCount - 1) ch.classList.add('selected');
+                    if (c === visibleCount - 1 && checkersCount > 1) ch.innerText = checkersCount;
+                    stack.appendChild(ch);
+                }
+                point.appendChild(stack);
+            }
+            return point;
+        }
+
+        function renderBar() {
+            const barP1 = document.getElementById('bar-p1');
+            const barP2 = document.getElementById('bar-p2');
+            barP1.innerHTML = '';
+            barP2.innerHTML = '';
+
+            for (let i = 0; i < bar.p1; i++) {
+                const ch = document.createElement('div');
+                ch.className = `checker checker-white ${selectedPoint === 'bar' && turn === 1 ? 'selected' : ''}`;
+                if (turn === 1) ch.onclick = () => selectBar();
+                barP1.appendChild(ch);
+            }
+            for (let i = 0; i < bar.p2; i++) {
+                const ch = document.createElement('div');
+                ch.className = `checker checker-black ${selectedPoint === 'bar' && turn === -1 ? 'selected' : ''}`;
+                if (turn === -1) ch.onclick = () => selectBar();
+                barP2.appendChild(ch);
+            }
+        }
+
+        function renderOff() {
+            const offP1 = document.getElementById('off-p1');
+            const offP2 = document.getElementById('off-p2');
+            offP1.innerHTML = '';
+            offP2.innerHTML = '';
+
+            for (let i = 0; i < off.p1; i++) {
+                const ch = document.createElement('div');
+                ch.className = 'w-5 h-5 rounded-full checker-white border border-gray-400';
+                offP1.appendChild(ch);
+            }
+            for (let i = 0; i < off.p2; i++) {
+                const ch = document.createElement('div');
+                ch.className = 'w-5 h-5 rounded-full checker-black border border-gray-600';
+                offP2.appendChild(ch);
+            }
+
+            document.getElementById('p1-score').innerText = `Toplanan: ${off.p1}/15`;
+            document.getElementById('p2-score').innerText = `Toplanan: ${off.p2}/15`;
+        }
+
+        // ZAR
+        function rollDice() {
+            if (movesLeft.length > 0 || !canAct()) return;
+            rollId++;
+            shownRollId = rollId;
+
+            playSound('dice');
+            const d1 = Math.floor(Math.random() * 6) + 1;
+            const d2 = Math.floor(Math.random() * 6) + 1;
+            const who = turn === 1 ? '1 (Beyaz)' : '2 (Siyah)';
+
+            dice = [d1, d2];
+            if (d1 === d2) {
+                movesLeft = [d1, d1, d1, d1];
+                log(`Oyuncu ${who} ÇİFT attı! [${d1}-${d2}]`);
+            } else {
+                movesLeft = [d1, d2];
+                log(`Oyuncu ${who} zarları attı: [${d1}-${d2}]`);
+            }
+
+            renderDiceVisuals();
+            renderBoard();
+            updateUI();
+            syncState();
+
+            if (!hasAnyValidMoves()) {
+                setTimeout(() => {
+                    log("Geçerli hamle kalmadı! Sıra devrediliyor.");
+                    endTurn();
+                }, 1500);
+            }
+        }
+
+        function renderDiceVisuals() {
+            const container = document.getElementById('dice-container');
+            container.innerHTML = '';
+
+            const dotPositions = {
+                1: [4], 2: [0, 8], 3: [0, 4, 8],
+                4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8]
+            };
+
+            dice.forEach(val => {
+                const diceEl = document.createElement('div');
+                diceEl.className = 'dice dice-rolling';
+                for (let i = 0; i < 9; i++) {
+                    const dot = document.createElement('div');
+                    if (dotPositions[val].includes(i)) dot.className = 'dot';
+                    diceEl.appendChild(dot);
+                }
+                container.appendChild(diceEl);
+            });
+        }
+
+        // OYUN MEKANİĞİ
+        function handlePointClick(i) {
+            if (!canAct()) return;
+            _handlePointClick(i);
+            syncState();
+        }
+
+        function _handlePointClick(pointIndex) {
+            if (movesLeft.length === 0) return;
+
+            // Barda taş varsa önce onu oynamak zorunlu
+            if (barCount() > 0) {
+                if (selectedPoint !== 'bar') {
+                    selectBar();
+                    return;
+                }
+                if (executeMove('bar', pointIndex)) selectedPoint = null;
+                renderBoard();
+                updateUI();
+                return;
+            }
+
+            if (selectedPoint === null) {
+                if (isOwn(pointIndex)) {
+                    selectedPoint = pointIndex;
+                    playSound('move');
+                }
+            } else if (selectedPoint === pointIndex) {
+                selectedPoint = null;
+            } else {
+                if (executeMove(selectedPoint, pointIndex)) {
+                    selectedPoint = null;
+                } else if (isOwn(pointIndex)) {
+                    selectedPoint = pointIndex;
+                    playSound('move');
+                } else {
+                    selectedPoint = null;
+                }
+            }
+
+            renderBoard();
+            updateUI();
+        }
+
+        function selectBar() {
+            if (!canAct()) return;
+            if (barCount() > 0 && movesLeft.length > 0) {
+                selectedPoint = 'bar';
+                playSound('move');
+                renderBoard();
+                updateUI();
+            }
+        }
+
+        function executeMove(from, to) {
+            let distance;
+            if (from === 'bar') {
+                // Beyaz: 0-5 arası girer, Siyah: 18-23 arası girer
+                distance = turn === 1 ? (to + 1) : (24 - to);
+            } else {
+                distance = turn === 1 ? (to - from) : (from - to);
+            }
+
+            const diceIndex = movesLeft.indexOf(distance);
+            if (diceIndex === -1) return false;
+            if (isBlocked(to)) return false;
+
+            const targetVal = board[to];
+            const isHit = (turn === 1 && targetVal === -1) || (turn === -1 && targetVal === 1);
+
+            if (from === 'bar') {
+                if (turn === 1) bar.p1--; else bar.p2--;
+            } else {
+                board[from] -= turn;
+            }
+
+            if (isHit) {
+                playSound('hit');
+                board[to] = turn;
+                if (turn === 1) bar.p2++; else bar.p1++;
+                log(`💥 Oyuncu ${turn === 1 ? '1' : '2'} rakip taşı kırdı!`);
+            } else {
+                playSound('move');
+                board[to] += turn;
+            }
+
+            movesLeft.splice(diceIndex, 1);
+            log(`Oyuncu ${turn === 1 ? '1' : '2'}: ${from === 'bar' ? 'Bar' : (from + 1) + '. hane'}'dan ${to + 1}. haneye hareket etti.`);
+
+            afterMove();
+            return true;
+        }
+
+        // Taş toplama (kendi kutusuna tıklayınca)
+        function bearOff(player) {
+            if (!canAct() || player !== turn) return;
+            if (movesLeft.length === 0 || typeof selectedPoint !== 'number') return;
+            if (!canBearOff()) {
+                log("Önce tüm taşlarını evine getirmelisin.");
+                return;
+            }
+
+            const from = selectedPoint;
+            const valid = movesLeft.filter(d => bearOffValid(from, d)).sort((a, b) => a - b);
+            if (valid.length === 0) return;
+
+            const die = valid[0];
+            movesLeft.splice(movesLeft.indexOf(die), 1);
+            board[from] -= turn;
+            if (turn === 1) off.p1++; else off.p2++;
+            playSound('move');
+            log(`Oyuncu ${turn === 1 ? '1' : '2'}: ${from + 1}. haneden taş topladı.`);
+
+            selectedPoint = null;
+            afterMove();
+            renderBoard();
+            updateUI();
+            syncState();
+        }
+
+        function afterMove() {
+            if (checkWinCondition()) return;
+            if (movesLeft.length === 0) {
+                endTurn();
+            } else if (!hasAnyValidMoves()) {
+                log("Geçerli hamle kalmadı! Sıra devrediliyor.");
+                endTurn();
+            }
+        }
+
+        function isValidMoveDestination(toIndex) {
+            if (selectedPoint === null || movesLeft.length === 0) return false;
+
+            for (let d of movesLeft) {
+                let target;
+                if (selectedPoint === 'bar') {
+                    target = turn === 1 ? d - 1 : 24 - d;
+                } else {
+                    target = turn === 1 ? selectedPoint + d : selectedPoint - d;
+                }
+                if (target === toIndex && !isBlocked(toIndex)) return true;
+            }
+            return false;
+        }
+
+        function hasAnyValidMoves() {
+            if (movesLeft.length === 0) return false;
+
+            if (barCount() > 0) {
+                return movesLeft.some(d => {
+                    const target = turn === 1 ? d - 1 : 24 - d;
+                    return !isBlocked(target);
+                });
+            }
+
+            const bearing = canBearOff();
+
+            for (let i = 0; i < 24; i++) {
+                if (!isOwn(i)) continue;
+                for (let d of movesLeft) {
+                    const target = turn === 1 ? i + d : i - d;
+                    if (target >= 0 && target < 24) {
+                        if (!isBlocked(target)) return true;
+                    } else if (bearing && bearOffValid(i, d)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function endTurn() {
+            turn = turn === 1 ? -1 : 1;
+            movesLeft = [];
+            selectedPoint = null;
+            renderBoard();
+            updateUI();
+            log(`Sıra Oyuncu ${turn === 1 ? '1 (Beyaz)' : '2 (Siyah)'}'de.`);
+            syncState();
+        }
+
+        function checkWinCondition() {
+            if (off.p1 === 15 || off.p2 === 15) {
+                const winner = off.p1 === 15 ? "OYUNCU 1 (BEYAZ)" : "OYUNCU 2 (SİYAH)";
+                renderBoard();
+                setTimeout(() => {
+                    alert(`🎉 TEBRİKLER! ${winner} OYUNU KAZANDI!`);
+                    initGame(true);
+                }, 100);
+                return true;
+            }
+            return false;
+        }
+
+        function updateUI() {
+            const btnRoll = document.getElementById('btn-roll');
+            const p1Card = document.getElementById('player1-card');
+            const p2Card = document.getElementById('player2-card');
+            const availMoves = document.getElementById('available-moves');
+
+            btnRoll.disabled = movesLeft.length > 0 || !canAct();
+
+            const roleEl = document.getElementById('role-info');
+            if (roleEl) {
+                roleEl.innerText = !socket ? 'Çevrimdışı mod'
+                    : myColor === 1 ? 'Sen: Oyuncu 1 (Beyaz)'
+                    : myColor === -1 ? 'Sen: Oyuncu 2 (Siyah)'
+                    : 'İzleyicisin';
+            }
+
+            if (turn === 1) {
+                p1Card.classList.remove('opacity-50');
+                p2Card.classList.add('opacity-50');
+            } else {
+                p2Card.classList.remove('opacity-50');
+                p1Card.classList.add('opacity-50');
+            }
+
+            availMoves.innerHTML = '';
+            if (movesLeft.length > 0) {
+                movesLeft.forEach(m => {
+                    const badge = document.createElement('span');
+                    badge.className = 'px-2.5 py-1 bg-amber-600/40 border border-amber-500/50 rounded-lg text-amber-300 font-bold text-xs shadow';
+                    badge.innerText = m;
+                    availMoves.appendChild(badge);
+                });
+            } else {
+                availMoves.innerHTML = '<span class="text-xs italic text-gray-500">Zar bekleniyor...</span>';
+            }
+        }
+
+        function renderLog() {
+            const logBox = document.getElementById('game-log');
+            logBox.innerHTML = '';
+            logHistory.forEach((msg) => {
+                const entry = document.createElement('div');
+                entry.className = 'py-0.5 border-b border-amber-900/20';
+                entry.innerText = msg;
+                logBox.appendChild(entry);
+            });
+        }
+
+        function log(msg) {
+            logHistory.unshift(msg);
+            if (logHistory.length > 50) logHistory.pop();
+            renderLog();
+        }
+
+        initGame(false);
+    </script>
+</body>
+</html>
