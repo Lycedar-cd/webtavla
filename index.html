@@ -100,6 +100,20 @@
 </head>
 <body class="min-h-screen flex flex-col justify-between p-2 md:p-6">
 
+    <!-- İSİM SEÇME PENCERESİ -->
+    <div id="name-modal" class="hidden fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+        <div class="wood-border rounded-2xl p-6 w-full max-w-sm text-center">
+            <h2 class="title-font text-xl text-amber-400 mb-1">HOŞ GELDİN</h2>
+            <p class="text-xs text-amber-200/70 mb-4">Oyunda görünecek ismini seç</p>
+            <input id="name-input" type="text" maxlength="16" placeholder="İsmin (en fazla 16 harf)"
+                onkeydown="if(event.key==='Enter') saveName()"
+                class="w-full bg-stone-900/90 border border-amber-900/50 rounded-lg px-3 py-2 text-sm text-amber-100 placeholder-gray-500 focus:outline-none focus:border-amber-500/70 mb-3" style="user-select:text">
+            <button onclick="saveName()" class="w-full bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white font-bold px-6 py-2 rounded-xl border border-amber-400/30 transition">
+                OYUNA GİR
+            </button>
+        </div>
+    </div>
+
     <!-- HEADER -->
     <header class="max-w-7xl w-full mx-auto bg-black/40 backdrop-blur-md rounded-2xl p-4 border border-amber-900/40 shadow-2xl flex flex-wrap items-center justify-between gap-4 mb-4">
         <div class="flex items-center gap-3">
@@ -114,7 +128,7 @@
             <div id="player1-card" class="flex items-center gap-3 transition-all duration-300">
                 <div class="w-6 h-6 rounded-full checker-white border border-gray-400 shadow"></div>
                 <div>
-                    <div class="text-xs font-semibold text-gray-300">OYUNCU 1 (Beyaz)</div>
+                    <div id="p1-name" class="text-xs font-semibold text-gray-300">OYUNCU 1</div>
                     <div class="text-sm font-bold text-amber-400" id="p1-score">Toplanan: 0/15</div>
                 </div>
             </div>
@@ -122,7 +136,7 @@
             <div id="player2-card" class="flex items-center gap-3 opacity-50 transition-all duration-300">
                 <div class="w-6 h-6 rounded-full checker-black border border-gray-600 shadow"></div>
                 <div>
-                    <div class="text-xs font-semibold text-gray-300">OYUNCU 2 (Siyah)</div>
+                    <div id="p2-name" class="text-xs font-semibold text-gray-300">OYUNCU 2</div>
                     <div class="text-sm font-bold text-amber-400" id="p2-score">Toplanan: 0/15</div>
                 </div>
             </div>
@@ -211,22 +225,41 @@
                     </div>
                 </div>
             </div>
+
+            <!-- SOHBET -->
+            <div class="bg-black/40 backdrop-blur-md rounded-2xl p-4 border border-amber-900/40 shadow-xl">
+                <h3 class="text-sm font-bold text-amber-400 mb-2 flex items-center gap-2">
+                    <i class="fa-solid fa-comments"></i> SOHBET
+                </h3>
+                <div id="chat-box" class="h-[160px] overflow-y-auto flex flex-col gap-1.5 pr-1 mb-2"></div>
+                <div class="flex gap-2">
+                    <input id="chat-input" type="text" maxlength="200" placeholder="Mesaj yaz..."
+                        onkeydown="if(event.key==='Enter') sendChat()"
+                        class="flex-1 min-w-0 bg-stone-900/80 border border-amber-900/40 rounded-lg px-3 py-1.5 text-xs text-amber-100 placeholder-gray-500 focus:outline-none focus:border-amber-500/60" style="user-select:text">
+                    <button onclick="sendChat()" class="bg-amber-700 hover:bg-amber-600 text-white px-3 rounded-lg text-xs transition" title="Gönder">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
         </div>
     </main>
 
     <footer class="max-w-7xl w-full mx-auto text-center text-xs text-amber-200/40 mt-4">
         C# Logic Mantığı ile Geliştirilmiş Web Tabanlı Tavla &copy; 2026
         <div id="role-info" class="mt-1 text-amber-300"></div>
+        <button onclick="showNameModal()" class="mt-1 text-amber-200/60 underline hover:text-amber-300">İsmi değiştir</button>
     </footer>
 
     <script>
         // Socket.io sunucusu yoksa oyun yine de çalışsın
         let clientId = sessionStorage.getItem('clientId');
-if (!clientId) {
-    clientId = Math.random().toString(36).slice(2);
-    sessionStorage.setItem('clientId', clientId);
-}
-const socket = (typeof io !== 'undefined') ? io({ auth: { clientId } }) : null;
+        if (!clientId) {
+            clientId = Math.random().toString(36).slice(2);
+            sessionStorage.setItem('clientId', clientId);
+        }
+        let savedName = null;
+        try { savedName = localStorage.getItem('playerName'); } catch (e) {}
+        const socket = (typeof io !== 'undefined') ? io({ auth: { clientId, name: savedName } }) : null;
         let myColor = null;     // 1 Beyaz, -1 Siyah, null izleyici
         let logHistory = [];
         let rollId = 0;
@@ -235,6 +268,73 @@ const socket = (typeof io !== 'undefined') ? io({ auth: { clientId } }) : null;
         if (socket) {
             socket.on('rol', (c) => { myColor = c; updateUI(); });
             socket.on('durum', (st) => applyState(st));
+            socket.on('oyuncular', (o) => applyNames(o));
+            socket.on('chat', (m) => addChatMessage(m));
+            socket.on('sohbet-gecmis', (arr) => {
+                document.getElementById('chat-box').innerHTML = '';
+                arr.forEach(addChatMessage);
+            });
+        }
+
+        function addChatMessage(m) {
+            const box = document.getElementById('chat-box');
+            const mine = (socket && m.sid === socket.id) || (m.renk !== null && m.renk === myColor);
+            const name = m.isim || (m.renk === 1 ? 'Oyuncu 1' : m.renk === -1 ? 'Oyuncu 2' : 'İzleyici');
+
+            const row = document.createElement('div');
+            row.className = 'flex flex-col ' + (mine ? 'items-end' : 'items-start');
+
+            const who = document.createElement('span');
+            who.className = 'text-[10px] text-amber-200/50';
+            who.textContent = mine ? 'Sen' : name;
+
+            const bubble = document.createElement('span');
+            bubble.className = 'px-2.5 py-1 rounded-lg text-xs max-w-[85%] break-words ' +
+                (mine ? 'bg-amber-600/50 text-amber-50' : 'bg-stone-700/70 text-gray-200');
+            bubble.textContent = m.text;
+
+            row.appendChild(who);
+            row.appendChild(bubble);
+            box.appendChild(row);
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function sendChat() {
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            if (!text || !socket) return;
+            socket.emit('chat', text);
+            input.value = '';
+        }
+
+        let playerNames = { 1: null, '-1': null };
+
+        // Hamle geçmişinde görünecek oyuncu adı
+        function pname(t) {
+            const n = playerNames[t === 1 ? 1 : '-1'];
+            return n ? n : (t === 1 ? 'Oyuncu 1' : 'Oyuncu 2');
+        }
+
+        function applyNames(o) {
+            playerNames = o;
+            document.getElementById('p1-name').textContent = o[1] ? o[1] : 'OYUNCU 1';
+            document.getElementById('p2-name').textContent = o['-1'] ? o['-1'] : 'OYUNCU 2';
+        }
+
+        function showNameModal() {
+            const input = document.getElementById('name-input');
+            input.value = savedName || '';
+            document.getElementById('name-modal').classList.remove('hidden');
+            input.focus();
+        }
+
+        function saveName() {
+            const n = document.getElementById('name-input').value.trim().slice(0, 16);
+            if (!n) return;
+            savedName = n;
+            try { localStorage.setItem('playerName', n); } catch (e) {}
+            if (socket) socket.emit('isim', n);
+            document.getElementById('name-modal').classList.add('hidden');
         }
 
         function canAct() { return !socket || myColor === turn; }
@@ -329,7 +429,7 @@ const socket = (typeof io !== 'undefined') ? io({ auth: { clientId } }) : null;
             shownRollId = 0;
 
             document.getElementById('dice-container').innerHTML = '';
-            log("Yeni oyun başlatıldı. Oyuncu 1 (Beyaz) başlar.");
+            log(`Yeni oyun başlatıldı. ${pname(1)} başlar.`);
             renderBoard();
             updateUI();
             if (shouldSync) syncState();
@@ -473,15 +573,15 @@ const socket = (typeof io !== 'undefined') ? io({ auth: { clientId } }) : null;
             playSound('dice');
             const d1 = Math.floor(Math.random() * 6) + 1;
             const d2 = Math.floor(Math.random() * 6) + 1;
-            const who = turn === 1 ? '1 (Beyaz)' : '2 (Siyah)';
+            const who = pname(turn);
 
             dice = [d1, d2];
             if (d1 === d2) {
                 movesLeft = [d1, d1, d1, d1];
-                log(`Oyuncu ${who} ÇİFT attı! [${d1}-${d2}]`);
+                log(`${who} ÇİFT attı! [${d1}-${d2}]`);
             } else {
                 movesLeft = [d1, d2];
-                log(`Oyuncu ${who} zarları attı: [${d1}-${d2}]`);
+                log(`${who} zarları attı: [${d1}-${d2}]`);
             }
 
             renderDiceVisuals();
@@ -598,14 +698,14 @@ const socket = (typeof io !== 'undefined') ? io({ auth: { clientId } }) : null;
                 playSound('hit');
                 board[to] = turn;
                 if (turn === 1) bar.p2++; else bar.p1++;
-                log(`💥 Oyuncu ${turn === 1 ? '1' : '2'} rakip taşı kırdı!`);
+                log(`💥 ${pname(turn)} rakip taşı kırdı!`);
             } else {
                 playSound('move');
                 board[to] += turn;
             }
 
             movesLeft.splice(diceIndex, 1);
-            log(`Oyuncu ${turn === 1 ? '1' : '2'}: ${from === 'bar' ? 'Bar' : (from + 1) + '. hane'}'dan ${to + 1}. haneye hareket etti.`);
+            log(`${pname(turn)}: ${from === 'bar' ? "Bar'dan" : (from + 1) + '. haneden'} ${to + 1}. haneye hareket etti.`);
 
             afterMove();
             return true;
@@ -629,7 +729,7 @@ const socket = (typeof io !== 'undefined') ? io({ auth: { clientId } }) : null;
             board[from] -= turn;
             if (turn === 1) off.p1++; else off.p2++;
             playSound('move');
-            log(`Oyuncu ${turn === 1 ? '1' : '2'}: ${from + 1}. haneden taş topladı.`);
+            log(`${pname(turn)}: ${from + 1}. haneden taş topladı.`);
 
             selectedPoint = null;
             afterMove();
@@ -695,13 +795,13 @@ const socket = (typeof io !== 'undefined') ? io({ auth: { clientId } }) : null;
             selectedPoint = null;
             renderBoard();
             updateUI();
-            log(`Sıra Oyuncu ${turn === 1 ? '1 (Beyaz)' : '2 (Siyah)'}'de.`);
+            log(`Sıra: ${pname(turn)}`);
             syncState();
         }
 
         function checkWinCondition() {
             if (off.p1 === 15 || off.p2 === 15) {
-                const winner = off.p1 === 15 ? "OYUNCU 1 (BEYAZ)" : "OYUNCU 2 (SİYAH)";
+                const winner = pname(off.p1 === 15 ? 1 : -1);
                 renderBoard();
                 setTimeout(() => {
                     alert(`🎉 TEBRİKLER! ${winner} OYUNU KAZANDI!`);
@@ -767,6 +867,7 @@ const socket = (typeof io !== 'undefined') ? io({ auth: { clientId } }) : null;
         }
 
         initGame(false);
+        if (socket && !savedName) showNameModal();
     </script>
 </body>
 </html>
