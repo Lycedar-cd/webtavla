@@ -114,6 +114,18 @@
         </div>
     </div>
 
+    <!-- KAZANMA PENCERESİ -->
+    <div id="win-modal" class="hidden fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+        <div class="wood-border rounded-2xl p-8 w-full max-w-sm text-center">
+            <div class="text-5xl mb-3">🏆</div>
+            <h2 class="title-font text-2xl text-amber-400 mb-2">TEBRİKLER!</h2>
+            <p id="win-text" class="text-lg text-amber-100 font-semibold mb-6 break-words"></p>
+            <button onclick="initGame(true)" class="w-full bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white font-bold px-6 py-2.5 rounded-xl border border-amber-400/30 transition">
+                YENİ OYUN
+            </button>
+        </div>
+    </div>
+
     <!-- HEADER -->
     <header class="max-w-7xl w-full mx-auto bg-black/40 backdrop-blur-md rounded-2xl p-4 border border-amber-900/40 shadow-2xl flex flex-wrap items-center justify-between gap-4 mb-4">
         <div class="flex items-center gap-3">
@@ -337,7 +349,19 @@
             document.getElementById('name-modal').classList.add('hidden');
         }
 
-        function canAct() { return !socket || myColor === turn; }
+        function isGameOver() { return off.p1 === 15 || off.p2 === 15; }
+
+        function showWin() {
+            const w = off.p1 === 15 ? 1 : -1;
+            document.getElementById('win-text').textContent = pname(w) + ' oyunu kazandı!';
+            document.getElementById('win-modal').classList.remove('hidden');
+        }
+
+        function hideWin() {
+            document.getElementById('win-modal').classList.add('hidden');
+        }
+
+        function canAct() { return !isGameOver() && (!socket || myColor === turn); }
 
         function getState() {
             return { board, turn, bar, off, dice, movesLeft, logHistory, rollId };
@@ -354,6 +378,7 @@
             selectedPoint = null;
 
             renderLog();
+            if (isGameOver()) showWin(); else hideWin();
             if (rollId !== shownRollId) {
                 shownRollId = rollId;
                 if (dice.length) renderDiceVisuals();
@@ -428,6 +453,7 @@
             rollId = 0;
             shownRollId = 0;
 
+            hideWin();
             document.getElementById('dice-container').innerHTML = '';
             log(`Yeni oyun başlatıldı. ${pname(1)} başlar.`);
             renderBoard();
@@ -800,13 +826,9 @@
         }
 
         function checkWinCondition() {
-            if (off.p1 === 15 || off.p2 === 15) {
-                const winner = pname(off.p1 === 15 ? 1 : -1);
+            if (isGameOver()) {
                 renderBoard();
-                setTimeout(() => {
-                    alert(`🎉 TEBRİKLER! ${winner} OYUNU KAZANDI!`);
-                    initGame(true);
-                }, 100);
+                showWin();
                 return true;
             }
             return false;
