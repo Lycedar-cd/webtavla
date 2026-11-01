@@ -132,7 +132,7 @@
             <i class="fa-solid fa-dice-d6 text-3xl text-amber-500"></i>
             <div>
                 <h1 class="text-2xl font-bold title-font tracking-wider text-amber-400">GELENEKSEL TAVLA</h1>
-                <p class="text-xs text-amber-200/60">Node.js & Socket.io Online Tavla</p>
+                <p class="text-xs text-amber-200/60">Geliştirilen online tavla oyunu</p>
             </div>
         </div>
 
@@ -244,10 +244,12 @@
                     <i class="fa-solid fa-comments"></i> SOHBET
                 </h3>
                 <div id="chat-box" class="h-[160px] overflow-y-auto flex flex-col gap-1.5 pr-1 mb-2"></div>
+                <div id="emoji-panel" class="hidden grid grid-cols-8 gap-1 bg-stone-900/90 border border-amber-900/40 rounded-lg p-2 mb-2 max-h-[120px] overflow-y-auto"></div>
                 <div class="flex gap-2">
                     <input id="chat-input" type="text" maxlength="200" placeholder="Mesaj yaz..."
                         onkeydown="if(event.key==='Enter') sendChat()"
                         class="flex-1 min-w-0 bg-stone-900/80 border border-amber-900/40 rounded-lg px-3 py-1.5 text-xs text-amber-100 placeholder-gray-500 focus:outline-none focus:border-amber-500/60" style="user-select:text">
+                    <button onclick="toggleEmoji()" class="bg-stone-800 hover:bg-stone-700 border border-amber-900/40 text-base px-2 rounded-lg transition" title="Emoji">😊</button>
                     <button onclick="sendChat()" class="bg-amber-700 hover:bg-amber-600 text-white px-3 rounded-lg text-xs transition" title="Gönder">
                         <i class="fa-solid fa-paper-plane"></i>
                     </button>
@@ -309,6 +311,38 @@
             row.appendChild(bubble);
             box.appendChild(row);
             box.scrollTop = box.scrollHeight;
+        }
+
+        const EMOJIS = ['😀','😂','🤣','😊','😍','😎','🤔','😮','😢','😭','😡','🥳',
+            '👍','👎','👏','🙏','💪','🔥','🎉','🏆','🎲','♟️','❤️','💔',
+            '😅','😬','🙄','😴','🤝','👋','😈','🍀','🤞','💥','✨','😏',
+            '🥲','😱','🤯','😇','🤗','😤','🫡','🤭','😜','🥶','🤬','👀'];
+
+        function buildEmojiPanel() {
+            const panel = document.getElementById('emoji-panel');
+            panel.innerHTML = '';
+            EMOJIS.forEach((e) => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.textContent = e;
+                b.className = 'text-xl leading-none p-1 rounded hover:bg-amber-700/40 transition';
+                b.onclick = () => addEmoji(e);
+                panel.appendChild(b);
+            });
+        }
+
+        function toggleEmoji() {
+            document.getElementById('emoji-panel').classList.toggle('hidden');
+        }
+
+        function addEmoji(e) {
+            const input = document.getElementById('chat-input');
+            const start = input.selectionStart ?? input.value.length;
+            const end = input.selectionEnd ?? input.value.length;
+            input.value = input.value.slice(0, start) + e + input.value.slice(end);
+            const pos = start + e.length;
+            input.focus();
+            input.setSelectionRange(pos, pos);
         }
 
         function sendChat() {
@@ -888,6 +922,7 @@
             renderLog();
         }
 
+        buildEmojiPanel();
         initGame(false);
         if (socket && !savedName) showNameModal();
     </script>
