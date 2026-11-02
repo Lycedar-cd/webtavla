@@ -109,16 +109,29 @@
 </head>
 <body class="min-h-screen flex flex-col justify-between p-2 md:p-6">
 
-    <!-- İSİM SEÇME PENCERESİ -->
-    <div id="name-modal" class="hidden fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+    <!-- GİRİŞ / KAYIT PENCERESİ -->
+    <div id="auth-modal" class="hidden fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4">
         <div class="wood-border rounded-2xl p-6 w-full max-w-sm text-center">
             <h2 class="title-font text-xl text-amber-400 mb-1">HOŞ GELDİN</h2>
-            <p class="text-xs text-amber-200/70 mb-4">Oyunda görünecek ismini seç</p>
-            <input id="name-input" type="text" maxlength="16" placeholder="İsmin (en fazla 16 harf)"
-                onkeydown="if(event.key==='Enter') saveName()"
-                class="w-full bg-stone-900/90 border border-amber-900/50 rounded-lg px-3 py-2 text-sm text-amber-100 placeholder-gray-500 focus:outline-none focus:border-amber-500/70 mb-3" style="user-select:text">
-            <button onclick="saveName()" class="w-full bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white font-bold px-6 py-2 rounded-xl border border-amber-400/30 transition">
-                OYUNA GİR
+            <p class="text-xs text-amber-200/70 mb-4">Oynamak için giriş yap ya da hesap oluştur</p>
+
+            <div class="flex gap-1 bg-black/40 rounded-lg p-1 mb-4">
+                <button id="auth-tab-giris" onclick="setAuthMode('giris')" class="flex-1 py-1.5 rounded-md text-sm font-semibold transition">Giriş Yap</button>
+                <button id="auth-tab-kayit" onclick="setAuthMode('kayit')" class="flex-1 py-1.5 rounded-md text-sm font-semibold transition">Kayıt Ol</button>
+            </div>
+
+            <input id="auth-user" type="text" maxlength="16" placeholder="Kullanıcı adı" autocomplete="username"
+                onkeydown="if(event.key==='Enter') document.getElementById('auth-pass').focus()"
+                class="w-full bg-stone-900/90 border border-amber-900/50 rounded-lg px-3 py-2 text-base text-amber-100 placeholder-gray-500 focus:outline-none focus:border-amber-500/70 mb-2" style="user-select:text">
+            <input id="auth-pass" type="password" maxlength="72" placeholder="Şifre" autocomplete="current-password"
+                onkeydown="if(event.key==='Enter') submitAuth()"
+                class="w-full bg-stone-900/90 border border-amber-900/50 rounded-lg px-3 py-2 text-base text-amber-100 placeholder-gray-500 focus:outline-none focus:border-amber-500/70 mb-2" style="user-select:text">
+
+            <p id="auth-hint" class="text-[11px] text-amber-200/50 mb-2 min-h-[16px]"></p>
+            <p id="auth-error" class="text-xs text-red-400 mb-3 min-h-[16px]"></p>
+
+            <button id="auth-submit" onclick="submitAuth()" class="w-full bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white font-bold px-6 py-2 rounded-xl border border-amber-400/30 transition disabled:opacity-50">
+                GİRİŞ YAP
             </button>
         </div>
     </div>
@@ -128,7 +141,8 @@
         <div class="wood-border rounded-2xl p-8 w-full max-w-sm text-center">
             <div class="text-5xl mb-3">🏆</div>
             <h2 class="title-font text-2xl text-amber-400 mb-2">TEBRİKLER!</h2>
-            <p id="win-text" class="text-lg text-amber-100 font-semibold mb-6 break-words"></p>
+            <p id="win-text" class="text-lg text-amber-100 font-semibold mb-2 break-words"></p>
+            <p id="win-gold" class="text-yellow-300 font-semibold mb-5 min-h-[1.5rem]"></p>
             <button onclick="initGame(true)" class="w-full bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white font-bold px-6 py-2.5 rounded-xl border border-amber-400/30 transition">
                 YENİ OYUN
             </button>
@@ -151,6 +165,7 @@
                 <div>
                     <div id="p1-name" class="text-xs font-semibold text-gray-300">OYUNCU 1</div>
                     <div class="text-sm font-bold text-amber-400" id="p1-score">Toplanan: 0/15</div>
+                    <div id="p1-gold" class="text-[11px] text-yellow-300 min-h-[14px]"></div>
                 </div>
             </div>
             <div class="h-8 w-px bg-amber-900/50"></div>
@@ -159,11 +174,17 @@
                 <div>
                     <div id="p2-name" class="text-xs font-semibold text-gray-300">OYUNCU 2</div>
                     <div class="text-sm font-bold text-amber-400" id="p2-score">Toplanan: 0/15</div>
+                    <div id="p2-gold" class="text-[11px] text-yellow-300 min-h-[14px]"></div>
                 </div>
             </div>
         </div>
 
         <div class="flex items-center gap-3">
+            <div id="account-chip" style="display:none" class="items-center gap-2 bg-black/50 px-3 py-1.5 rounded-xl border border-amber-800/30 text-xs">
+                <span id="acc-name" class="font-semibold text-amber-200 max-w-[110px] truncate"></span>
+                <span id="acc-gold" class="text-yellow-300 font-bold"></span>
+                <button onclick="logout()" title="Çıkış yap" class="text-amber-200/60 hover:text-amber-300"><i class="fa-solid fa-right-from-bracket"></i></button>
+            </div>
             <button id="btn-roll" onclick="rollDice()" class="bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white font-bold px-6 py-2.5 rounded-xl shadow-lg border border-amber-400/30 transition-all duration-200 flex items-center gap-2 transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
                 <i class="fa-solid fa-dice text-lg"></i>
                 <span>ZAR AT</span>
@@ -270,19 +291,15 @@
     <footer class="max-w-7xl w-full mx-auto text-center text-xs text-amber-200/40 mt-4">
         C# Logic Mantığı ile Geliştirilmiş Web Tabanlı Tavla &copy; 2026
         <div id="role-info" class="mt-1 text-amber-300"></div>
-        <button onclick="showNameModal()" class="mt-1 text-amber-200/60 underline hover:text-amber-300">İsmi değiştir</button>
     </footer>
 
     <script>
         // Socket.io sunucusu yoksa oyun yine de çalışsın
-        let clientId = sessionStorage.getItem('clientId');
-        if (!clientId) {
-            clientId = Math.random().toString(36).slice(2);
-            sessionStorage.setItem('clientId', clientId);
-        }
-        let savedName = null;
-        try { savedName = localStorage.getItem('playerName'); } catch (e) {}
-        const socket = (typeof io !== 'undefined') ? io({ auth: { clientId, name: savedName } }) : null;
+        let authToken = null;
+        try { authToken = localStorage.getItem('authToken'); } catch (e) {}
+        const socket = (typeof io !== 'undefined')
+            ? io({ autoConnect: !!authToken, auth: (cb) => cb({ token: authToken }) })
+            : null;
         let myColor = null;     // 1 Beyaz, -1 Siyah, null izleyici
         let logHistory = [];
         let rollId = 0;
@@ -292,6 +309,25 @@
             socket.on('rol', (c) => { myColor = c; updateUI(); });
             socket.on('durum', (st) => applyState(st));
             socket.on('oyuncular', (o) => applyNames(o));
+            socket.on('altinlar', (g) => applyGold(g));
+            socket.on('hesap', (a) => { myAccount = a; renderAccount(); });
+            socket.on('kazanc', (k) => {
+                const el = document.getElementById('win-gold');
+                el.textContent = (k.renk === myColor)
+                    ? '🪙 +' + k.miktar + ' altın kazandın!'
+                    : '🪙 Kazanan ' + k.miktar + ' altın kazandı';
+            });
+            socket.on('connect_error', (err) => {
+                if (err && err.message === 'auth') {
+                    authToken = null;
+                    try { localStorage.removeItem('authToken'); } catch (e) {}
+                    showAuthModal();
+                }
+            });
+            socket.on('disconnect', (reason) => {
+                // /sifirla gibi sunucu kaynaklı kopmalarda otomatik yeniden bağlan
+                if (reason === 'io server disconnect' && authToken) socket.connect();
+            });
             socket.on('chat', (m) => addChatMessage(m));
             socket.on('sohbet-gecmis', (arr) => {
                 document.getElementById('chat-box').innerHTML = '';
@@ -376,20 +412,87 @@
             document.getElementById('p2-name').textContent = o['-1'] ? o['-1'] : 'OYUNCU 2';
         }
 
-        function showNameModal() {
-            const input = document.getElementById('name-input');
-            input.value = savedName || '';
-            document.getElementById('name-modal').classList.remove('hidden');
-            input.focus();
+        let authMode = 'giris';
+        let myAccount = null;
+
+        function setAuthMode(mode) {
+            authMode = mode;
+            const on = 'flex-1 py-1.5 rounded-md text-sm font-semibold transition bg-amber-700 text-white';
+            const off = 'flex-1 py-1.5 rounded-md text-sm font-semibold transition text-amber-200/60 hover:text-amber-200';
+            document.getElementById('auth-tab-giris').className = mode === 'giris' ? on : off;
+            document.getElementById('auth-tab-kayit').className = mode === 'kayit' ? on : off;
+            document.getElementById('auth-submit').textContent = mode === 'giris' ? 'GİRİŞ YAP' : 'HESAP OLUŞTUR';
+            document.getElementById('auth-pass').autocomplete = mode === 'giris' ? 'current-password' : 'new-password';
+            document.getElementById('auth-hint').textContent = mode === 'kayit'
+                ? 'Kullanıcı adın oyunda görünecek (3-16 karakter). Şifre en az 6 karakter. Başka sitelerde kullandığın şifreyi verme.'
+                : '';
+            document.getElementById('auth-error').textContent = '';
         }
 
-        function saveName() {
-            const n = document.getElementById('name-input').value.trim().slice(0, 16);
-            if (!n) return;
-            savedName = n;
-            try { localStorage.setItem('playerName', n); } catch (e) {}
-            if (socket) socket.emit('isim', n);
-            document.getElementById('name-modal').classList.add('hidden');
+        function showAuthModal() {
+            setAuthMode(authMode);
+            document.getElementById('auth-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('auth-user').focus(), 50);
+        }
+
+        function hideAuthModal() {
+            document.getElementById('auth-modal').classList.add('hidden');
+        }
+
+        async function submitAuth() {
+            const username = document.getElementById('auth-user').value.trim();
+            const password = document.getElementById('auth-pass').value;
+            const errEl = document.getElementById('auth-error');
+            const btn = document.getElementById('auth-submit');
+            errEl.textContent = '';
+            if (!username || !password) { errEl.textContent = 'Kullanıcı adı ve şifre yaz.'; return; }
+
+            btn.disabled = true;
+            try {
+                const r = await fetch('/api/' + authMode, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) { errEl.textContent = data.hata || 'Bir hata oluştu.'; return; }
+
+                authToken = data.token;
+                try { localStorage.setItem('authToken', authToken); } catch (e) {}
+                document.getElementById('auth-pass').value = '';
+                hideAuthModal();
+                if (socket) { socket.disconnect(); socket.connect(); }
+            } catch (e) {
+                errEl.textContent = 'Sunucuya ulaşılamadı. İnternetini kontrol et.';
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function renderAccount() {
+            const chip = document.getElementById('account-chip');
+            if (!myAccount) { chip.style.display = 'none'; return; }
+            document.getElementById('acc-name').textContent = myAccount.username;
+            document.getElementById('acc-gold').textContent = '🪙 ' + myAccount.gold;
+            chip.style.display = 'flex';
+        }
+
+        async function logout() {
+            const token = authToken;
+            try {
+                await fetch('/api/cikis', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token })
+                });
+            } catch (e) {}
+            try { localStorage.removeItem('authToken'); } catch (e) {}
+            location.reload();
+        }
+
+        function applyGold(g) {
+            document.getElementById('p1-gold').textContent = g[1] != null ? '🪙 ' + g[1] : '';
+            document.getElementById('p2-gold').textContent = g['-1'] != null ? '🪙 ' + g['-1'] : '';
         }
 
         function isGameOver() { return off.p1 === 15 || off.p2 === 15; }
@@ -402,6 +505,7 @@
 
         function hideWin() {
             document.getElementById('win-modal').classList.add('hidden');
+            document.getElementById('win-gold').textContent = '';
         }
 
         function canAct() { return !isGameOver() && (!socket || myColor === turn); }
@@ -933,7 +1037,7 @@
 
         buildEmojiPanel();
         initGame(false);
-        if (socket && !savedName) showNameModal();
+        if (socket && !authToken) showAuthModal();
     </script>
 </body>
 </html>
