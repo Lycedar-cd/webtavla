@@ -159,7 +159,7 @@
             </div>
         </div>
 
-        <div class="flex items-center gap-6 bg-black/50 px-6 py-2 rounded-xl border border-amber-800/30">
+        <div id="header-players" class="hidden flex items-center gap-6 bg-black/50 px-6 py-2 rounded-xl border border-amber-800/30">
             <div id="player1-card" class="flex items-center gap-3 transition-all duration-300">
                 <div class="w-6 h-6 rounded-full checker-white border border-gray-400 shadow"></div>
                 <div>
@@ -185,18 +185,70 @@
                 <span id="acc-gold" class="text-yellow-300 font-bold"></span>
                 <button onclick="logout()" title="Çıkış yap" class="text-amber-200/60 hover:text-amber-300"><i class="fa-solid fa-right-from-bracket"></i></button>
             </div>
+            <div id="game-buttons" class="hidden flex items-center gap-3">
+                <button id="room-chip" onclick="copyRoomCode()" title="Oda kodunu kopyala" class="bg-black/50 hover:bg-black/70 px-3 py-2 rounded-xl border border-amber-800/30 text-xs text-amber-200 transition">
+                    <i class="fa-solid fa-key text-amber-500"></i> <span id="room-code-text" class="font-bold tracking-widest"></span>
+                </button>
             <button id="btn-roll" onclick="rollDice()" class="bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white font-bold px-6 py-2.5 rounded-xl shadow-lg border border-amber-400/30 transition-all duration-200 flex items-center gap-2 transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
-                <i class="fa-solid fa-dice text-lg"></i>
-                <span>ZAR AT</span>
-            </button>
-            <button onclick="initGame(true)" class="bg-stone-800 hover:bg-stone-700 text-amber-200 p-2.5 rounded-xl border border-amber-900/40 transition" title="Yeniden Başlat">
-                <i class="fa-solid fa-rotate-right"></i>
-            </button>
+                    <i class="fa-solid fa-dice text-lg"></i>
+                    <span>ZAR AT</span>
+                </button>
+                <button onclick="initGame(true)" class="bg-stone-800 hover:bg-stone-700 text-amber-200 p-2.5 rounded-xl border border-amber-900/40 transition" title="Yeniden Başlat">
+                    <i class="fa-solid fa-rotate-right"></i>
+                </button>
+        
+                <button id="btn-leave" onclick="leaveRoom()" title="Lobiye dön" class="bg-stone-800 hover:bg-stone-700 text-amber-200 p-2.5 rounded-xl border border-amber-900/40 transition">
+                    <i class="fa-solid fa-door-open"></i>
+                </button>
+            </div>
         </div>
     </header>
 
     <!-- MAIN -->
-    <main class="max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-4 gap-6 items-start flex-grow">
+    <!-- LOBİ -->
+    <section id="lobby-view" class="max-w-3xl w-full mx-auto flex-grow">
+        <div class="text-center mb-5">
+            <h2 class="title-font text-2xl text-amber-400">LOBİ</h2>
+            <p class="text-xs text-amber-200/60">Bir oda kur ya da açık bir odaya katıl</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+            <div class="bg-black/40 backdrop-blur-md rounded-2xl p-4 border border-amber-900/40 shadow-xl">
+                <h3 class="text-sm font-bold text-amber-400 mb-3 flex items-center gap-2"><i class="fa-solid fa-plus"></i> ODA KUR</h3>
+                <input id="room-name" type="text" maxlength="24" placeholder="Oda adı (isteğe bağlı)"
+                    onkeydown="if(event.key==='Enter') createRoom()"
+                    class="w-full bg-stone-900/90 border border-amber-900/50 rounded-lg px-3 py-2 text-base text-amber-100 placeholder-gray-500 focus:outline-none focus:border-amber-500/70 mb-2" style="user-select:text">
+                <label class="flex items-center gap-2 text-xs text-amber-200/70 mb-3 cursor-pointer">
+                    <input id="room-private" type="checkbox" class="accent-amber-600">
+                    Gizli oda (listede görünmez, sadece kodla girilir)
+                </label>
+                <button onclick="createRoom()" class="w-full bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white font-bold px-6 py-2 rounded-xl border border-amber-400/30 transition">
+                    ODA KUR
+                </button>
+            </div>
+
+            <div class="bg-black/40 backdrop-blur-md rounded-2xl p-4 border border-amber-900/40 shadow-xl">
+                <h3 class="text-sm font-bold text-amber-400 mb-3 flex items-center gap-2"><i class="fa-solid fa-key"></i> KODLA KATIL</h3>
+                <input id="room-code-input" type="text" maxlength="4" placeholder="Oda kodu (örn. K7M2)"
+                    oninput="this.value = this.value.toUpperCase()"
+                    onkeydown="if(event.key==='Enter') joinByCode()"
+                    class="w-full bg-stone-900/90 border border-amber-900/50 rounded-lg px-3 py-2 text-base text-amber-100 placeholder-gray-500 tracking-widest focus:outline-none focus:border-amber-500/70 mb-3" style="user-select:text">
+                <button onclick="joinByCode()" class="w-full bg-stone-800 hover:bg-stone-700 text-amber-200 font-bold px-6 py-2 rounded-xl border border-amber-900/40 transition">
+                    KATIL
+                </button>
+                <p class="text-[11px] text-amber-200/50 mt-3">Arkadaşının sana verdiği 4 harfli kodu yaz.</p>
+            </div>
+        </div>
+
+        <p id="lobby-error" class="text-xs text-red-400 min-h-[16px] mb-2 text-center"></p>
+
+        <div class="bg-black/40 backdrop-blur-md rounded-2xl p-4 border border-amber-900/40 shadow-xl">
+            <h3 class="text-sm font-bold text-amber-400 mb-3 flex items-center gap-2"><i class="fa-solid fa-door-open"></i> AÇIK ODALAR</h3>
+            <div id="room-list" class="space-y-2"></div>
+        </div>
+    </section>
+
+    <main id="game-view" class="hidden max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-4 gap-6 items-start flex-grow">
 
         <div class="lg:col-span-3 wood-border rounded-2xl p-3 md:p-5 relative shadow-2xl">
             <div class="absolute top-1/2 -left-3 w-3 h-12 bg-amber-600 rounded-l border border-amber-800 shadow transform -translate-y-1/2"></div>
@@ -310,6 +362,12 @@
             socket.on('durum', (st) => applyState(st));
             socket.on('oyuncular', (o) => applyNames(o));
             socket.on('altinlar', (g) => applyGold(g));
+            socket.on('odalar', (list) => renderRooms(list));
+            socket.on('connect', () => {
+                let kod = null;
+                try { kod = sessionStorage.getItem('roomKod'); } catch (e) {}
+                if (kod) joinRoom(kod, true); else showLobby();
+            });
             socket.on('hesap', (a) => { myAccount = a; renderAccount(); });
             socket.on('kazanc', (k) => {
                 const el = document.getElementById('win-gold');
@@ -412,6 +470,163 @@
             document.getElementById('p2-name').textContent = o['-1'] ? o['-1'] : 'OYUNCU 2';
         }
 
+        /* ------------------------------ Odalar ------------------------------ */
+        let currentRoom = null;
+
+        function show(id, on) {
+            document.getElementById(id).classList.toggle('hidden', !on);
+        }
+
+        function showLobby() {
+            currentRoom = null;
+            show('lobby-view', true);
+            show('game-view', false);
+            show('header-players', false);
+            show('game-buttons', false);
+            hideWin();
+            updateUI();
+        }
+
+        function showGame() {
+            show('lobby-view', false);
+            show('game-view', true);
+            show('header-players', true);
+            show('game-buttons', true);
+            setLobbyError('');
+        }
+
+        function setLobbyError(msg) {
+            document.getElementById('lobby-error').textContent = msg || '';
+        }
+
+        function resetGameView() {
+            myColor = null;
+            applyNames({ 1: null, '-1': null });
+            applyGold({ 1: null, '-1': null });
+            document.getElementById('chat-box').innerHTML = '';
+            document.getElementById('emoji-panel').classList.add('hidden');
+            initGame(false);
+        }
+
+        function renderRooms(list) {
+            const box = document.getElementById('room-list');
+            box.innerHTML = '';
+            if (!list || list.length === 0) {
+                const p = document.createElement('p');
+                p.className = 'text-xs italic text-gray-500 text-center py-4';
+                p.textContent = 'Henüz açık oda yok. İlk odayı sen kur!';
+                box.appendChild(p);
+                return;
+            }
+            list.forEach((r) => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center justify-between gap-3 bg-stone-900/70 border border-amber-900/30 rounded-xl px-3 py-2';
+
+                const info = document.createElement('div');
+                info.className = 'min-w-0';
+                const title = document.createElement('div');
+                title.className = 'text-sm font-semibold text-amber-100 truncate';
+                title.textContent = r.ad;
+                const code = document.createElement('span');
+                code.className = 'ml-2 text-[11px] text-amber-200/50 tracking-widest';
+                code.textContent = r.kod;
+                title.appendChild(code);
+
+                const players = document.createElement('div');
+                players.className = 'text-xs text-gray-400 truncate';
+                const p1 = r.oyuncular[0] || 'boş';
+                const p2 = r.oyuncular[1] || 'boş';
+                players.textContent = '⚪ ' + p1 + '   vs   ⚫ ' + p2 + (r.izleyici > 0 ? '   · 👁 ' + r.izleyici : '');
+                info.appendChild(title);
+                info.appendChild(players);
+
+                const btn = document.createElement('button');
+                btn.className = 'shrink-0 px-4 py-1.5 rounded-lg text-xs font-bold border transition ' +
+                    (r.dolu
+                        ? 'bg-stone-800 hover:bg-stone-700 text-amber-200 border-amber-900/40'
+                        : 'bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white border-amber-400/30');
+                btn.textContent = r.dolu ? 'İZLE' : 'KATIL';
+                btn.onclick = () => joinRoom(r.kod, false);
+
+                row.appendChild(info);
+                row.appendChild(btn);
+                box.appendChild(row);
+            });
+        }
+
+        function createRoom() {
+            if (!socket) return;
+            setLobbyError('');
+            const ad = document.getElementById('room-name').value.trim();
+            const gizli = document.getElementById('room-private').checked;
+            socket.emit('oda-kur', { ad, gizli }, (res) => {
+                if (!res || !res.ok) { setLobbyError((res && res.hata) || 'Oda kurulamadı.'); return; }
+                document.getElementById('room-name').value = '';
+                joinRoom(res.kod, false);
+            });
+        }
+
+        function joinByCode() {
+            const kod = document.getElementById('room-code-input').value.trim().toUpperCase();
+            if (kod.length !== 4) { setLobbyError('Oda kodu 4 harfli olmalı.'); return; }
+            joinRoom(kod, false);
+        }
+
+        function joinRoom(kod, silent) {
+            if (!socket) return;
+            socket.emit('oda-katil', { kod }, (res) => {
+                if (!res || !res.ok) {
+                    try { sessionStorage.removeItem('roomKod'); } catch (e) {}
+                    showLobby();
+                    if (!silent) setLobbyError((res && res.hata) || 'Odaya girilemedi.');
+                    return;
+                }
+                resetGameView();
+                currentRoom = { kod: res.kod, ad: res.ad };
+                try { sessionStorage.setItem('roomKod', res.kod); } catch (e) {}
+                document.getElementById('room-code-text').textContent = res.kod;
+                document.getElementById('room-chip').title = res.ad + ' – kodu kopyala';
+                document.getElementById('room-code-input').value = '';
+                showGame();
+            });
+        }
+
+        let leaveArmed = false;
+        function leaveRoom() {
+            if (!socket) return;
+            const btn = document.getElementById('btn-leave');
+            // Oyuncuysan yanlışlıkla çıkmamak için iki tıklama iste
+            if (myColor !== null && !isGameOver() && !leaveArmed) {
+                leaveArmed = true;
+                btn.classList.add('bg-red-800');
+                btn.title = 'Emin misin? Tekrar tıkla';
+                setTimeout(() => {
+                    leaveArmed = false;
+                    btn.classList.remove('bg-red-800');
+                    btn.title = 'Lobiye dön';
+                }, 3000);
+                return;
+            }
+            leaveArmed = false;
+            btn.classList.remove('bg-red-800');
+            socket.emit('oda-ayril', () => {});
+            try { sessionStorage.removeItem('roomKod'); } catch (e) {}
+            resetGameView();
+            showLobby();
+        }
+
+        function copyRoomCode() {
+            if (!currentRoom) return;
+            const el = document.getElementById('room-code-text');
+            const done = () => {
+                el.textContent = 'Kopyalandı';
+                setTimeout(() => { if (currentRoom) el.textContent = currentRoom.kod; }, 1200);
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(currentRoom.kod).then(done).catch(() => {});
+            }
+        }
+
         let authMode = 'giris';
         let myAccount = null;
 
@@ -487,6 +702,7 @@
                 });
             } catch (e) {}
             try { localStorage.removeItem('authToken'); } catch (e) {}
+            try { sessionStorage.removeItem('roomKod'); } catch (e) {}
             location.reload();
         }
 
@@ -1037,6 +1253,7 @@
 
         buildEmojiPanel();
         initGame(false);
+        if (!socket) showGame();
         if (socket && !authToken) showAuthModal();
     </script>
 </body>

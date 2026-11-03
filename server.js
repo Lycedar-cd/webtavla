@@ -134,27 +134,110 @@ app.post('/api/cikis', async (req, res) => {
     res.json({ ok: true });
 });
 
-/* ------------------------------- Oyun durumu ------------------------------ */
+/* ------------------------------- Odalar ------------------------------ */
 
-let players = { 1: null, '-1': null }; // role oturan hesap numarası
-let state = null;                       // son oyun durumu
-let chatHistory = [];                   // son sohbet mesajları
-let awarded = false;                    // bu oyun için altın verildi mi?
-const online = {};                      // hesap -> açık bağlantı sayısı
-const seatTimers = {};                  // hesap -> koltuğu boşaltma zamanlayıcısı
+const MAX_ROOMS = 50;
+const MAX_ROOMS_PER_USER = 3;
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-function colorOf(userId) {
-    if (players[1] === userId) return 1;
-    if (players['-1'] === userId) return -1;
+const rooms = new Map(); // oda kodu -> oda
+
+const roomKey = (code) => 'oda:' + code;
+
+function newRoomCode() {
+    for (let i = 0; i < 50; i++) {
+        let c = '';
+        for (let j = 0; j < 4; j++) c += CODE_CHARS[crypto.randomInt(CODE_CHARS.length)];
+        if (!rooms.has(c)) return c;
+    }
     return null;
 }
 
-function seat(userId) {
-    const c = colorOf(userId);
-    if (c !== null) return c;
-    if (!players[1]) { players[1] = userId; return 1; }
-    if (!players['-1']) { players['-1'] = userId; return -1; }
+function cleanRoomName(n, fallback) {
+    if (typeof n !== 'string') return fallback;
+    n = n.replace(/[\u0000-\u001F\u007F]/g, '').trim().slice(0, 24);
+    return n || fallback;
+}
+
+function createRoom(user, ad, gizli) {
+    const code = newRoomCode();
+    if (!code) return null;
+    const room = {
+        code,
+        ad: cleanRoomName(ad, user.username + ' odası'),
+        gizli: !!gizli,
+        createdBy: user.id,
+        createdAt: Date.now(),
+        players: { 1: null, '-1': null }, // role oturan hesap numarası
+        state: null,
+        chat: [],
+        awarded: false,
+        online: {},      // hesap -> bu odadaki açık bağlantı sayısı
+        seatTimers: {},  // hesap -> koltuğu boşaltma zamanlayıcısı
+        deleteTimer: null
+    };
+    rooms.set(code, room);
+    return room;
+}
+
+function colorOf(room, userId) {
+    if (room.players[1] === userId) return 1;
+    if (room.players['-1'] === userId) return -1;
     return null;
+}
+
+function seat(room, userId) {
+    const c = colorOf(room, userId);
+    if (c !== null) return c;
+    if (!room.players[1]) { room.players[1] = userId; return 1; }
+    if (!room.players['-1']) { room.players['-1'] = userId; return -1; }
+    return null;
+}
+
+function socketCount(room, exceptId) {
+    const set = io.sockets.adapter.rooms.get(roomKey(room.code));
+    if (!set) return 0;
+    let n = set.size;
+    if (exceptId && set.has(exceptId)) n--;
+    return n;
+}
+
+function scheduleCleanup(room, exceptId) {
+    if (room.deleteTimer) { clearTimeout(room.deleteTimer); room.deleteTimer = null; }
+    if (socketCount(room, exceptId) > 0) return;
+    // Oda 3 dakika boş kalırsa silinir (sayfa yenileme gibi kısa kopmalara tolerans)
+    room.deleteTimer = setTimeout(() => {
+        if (socketCount(room) > 0) return;
+        Object.values(room.seatTimers).forEach(clearTimeout);
+        rooms.delete(room.code);
+        broadcastLobby();
+    }, 3 * 60 * 1000);
+}
+
+function roomList() {
+    return [...rooms.values()]
+        .filter((r) => !r.gizli)
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .map((r) => ({
+            kod: r.code,
+            ad: r.ad,
+            oyuncular: [r.players[1] ? usernameCache[r.players[1]] || '?' : null,
+                        r.players['-1'] ? usernameCache[r.players['-1']] || '?' : null],
+            dolu: !!(r.players[1] && r.players['-1']),
+            izleyici: Math.max(0, socketCount(r) - [r.players[1], r.players['-1']].filter((id) => id && r.online[id] > 0).length)
+        }));
+}
+
+const usernameCache = {}; // hesap numarası -> kullanıcı adı
+
+let lobbyTimer = null;
+function broadcastLobby() {
+    // Art arda gelen değişiklikleri tek yayına indir
+    if (lobbyTimer) return;
+    lobbyTimer = setTimeout(() => {
+        lobbyTimer = null;
+        io.to('lobi').emit('odalar', roomList());
+    }, 100);
 }
 
 function cleanState(s) {
@@ -179,16 +262,17 @@ function cleanState(s) {
     };
 }
 
-async function broadcastPlayers() {
-    const ids = [players[1], players['-1']].filter(Boolean);
+async function broadcastPlayers(room) {
     const by = {};
-    for (const id of ids) {
+    for (const id of [room.players[1], room.players['-1']].filter(Boolean)) {
         const r = await pool.query('SELECT id, username, gold FROM users WHERE id = $1', [id]);
-        if (r.rows[0]) by[id] = r.rows[0];
+        if (r.rows[0]) { by[id] = r.rows[0]; usernameCache[id] = r.rows[0].username; }
     }
-    const pick = (c, f) => (by[players[c]] ? by[players[c]][f] : null);
-    io.emit('oyuncular', { 1: pick(1, 'username'), '-1': pick(-1, 'username') });
-    io.emit('altinlar', { 1: pick(1, 'gold'), '-1': pick(-1, 'gold') });
+    const pick = (c, f) => (by[room.players[c]] ? by[room.players[c]][f] : null);
+    const key = roomKey(room.code);
+    io.to(key).emit('oyuncular', { 1: pick(1, 'username'), '-1': pick(-1, 'username') });
+    io.to(key).emit('altinlar', { 1: pick(1, 'gold'), '-1': pick(-1, 'gold') });
+    broadcastLobby();
 }
 
 async function sendAccountToUser(userId) {
@@ -200,22 +284,44 @@ async function sendAccountToUser(userId) {
     });
 }
 
-async function awardWin(winnerColor, userId) {
+async function awardWin(room, winnerColor, userId) {
     await pool.query('UPDATE users SET gold = gold + $1, wins = wins + 1 WHERE id = $2', [WIN_GOLD, userId]);
-    io.emit('kazanc', { renk: winnerColor, miktar: WIN_GOLD });
-    await broadcastPlayers();
+    io.to(roomKey(room.code)).emit('kazanc', { renk: winnerColor, miktar: WIN_GOLD });
+    await broadcastPlayers(room);
     await sendAccountToUser(userId);
 }
 
-// Roller takılırsa bu adresi aç: /sifirla
-app.get('/sifirla', async (req, res) => {
-    players = { 1: null, '-1': null };
-    state = null;
-    chatHistory = [];
-    awarded = false;
-    res.send('Roller, oyun ve sohbet sifirlandi. Sayfayi yenileyin.');
-    io.disconnectSockets(true);
-});
+function freeSeat(room, userId) {
+    if (room.seatTimers[userId]) { clearTimeout(room.seatTimers[userId]); delete room.seatTimers[userId]; }
+    if (room.players[1] === userId) room.players[1] = null;
+    if (room.players['-1'] === userId) room.players['-1'] = null;
+    if (!room.players[1] && !room.players['-1']) { room.state = null; room.awarded = false; }
+    broadcastPlayers(room).catch((e) => console.error(e));
+}
+
+// Bir bağlantıyı bulunduğu odadan çıkarır. aniKoltuk: koltuğu hemen boşalt (odadan ayrıl düğmesi)
+function leaveCurrentRoom(socket, aniKoltuk) {
+    const code = socket.data.room;
+    if (!code) return;
+    const room = rooms.get(code);
+    socket.leave(roomKey(code));
+    socket.data.room = null;
+    if (!room) return;
+
+    const uid = socket.data.user.id;
+    room.online[uid] = Math.max(0, (room.online[uid] || 1) - 1);
+
+    if (room.online[uid] === 0 && colorOf(room, uid) !== null) {
+        if (aniKoltuk) {
+            freeSeat(room, uid);
+        } else {
+            // Bağlantı koptuysa 2 dakika içinde dönmezse koltuğu boşalt
+            room.seatTimers[uid] = setTimeout(() => freeSeat(room, uid), 2 * 60 * 1000);
+        }
+    }
+    scheduleCleanup(room, socket.id);
+    broadcastPlayers(room).catch((e) => console.error(e));
+}
 
 io.use(async (socket, next) => {
     try {
@@ -230,37 +336,96 @@ io.use(async (socket, next) => {
     }
 });
 
-io.on('connection', async (socket) => {
+io.on('connection', (socket) => {
     const user = socket.data.user;
+    usernameCache[user.id] = user.username;
+    socket.data.room = null;
 
-    online[user.id] = (online[user.id] || 0) + 1;
-    if (seatTimers[user.id]) { clearTimeout(seatTimers[user.id]); delete seatTimers[user.id]; }
-
-    const color = seat(user.id);
-    socket.emit('rol', color);
+    socket.join('lobi');
     socket.emit('hesap', { username: user.username, gold: user.gold, wins: user.wins });
-    if (state) socket.emit('durum', state);
-    socket.emit('sohbet-gecmis', chatHistory);
-    broadcastPlayers().catch((e) => console.error(e));
+    socket.emit('odalar', roomList());
+
+    let lastCreate = 0;
+
+    socket.on('oda-kur', (data, ack) => {
+        if (typeof ack !== 'function') return;
+        try {
+            const now = Date.now();
+            if (now - lastCreate < 2000) return ack({ hata: 'Biraz yavaş ol, birkaç saniye sonra tekrar dene.' });
+            lastCreate = now;
+            if (rooms.size >= MAX_ROOMS) return ack({ hata: 'Şu an çok fazla oda açık. Daha sonra tekrar dene.' });
+            const mine = [...rooms.values()].filter((r) => r.createdBy === user.id).length;
+            if (mine >= MAX_ROOMS_PER_USER) return ack({ hata: 'Çok fazla açık odan var. Birini kapatmak için odadan ayrıl.' });
+
+            const room = createRoom(user, data && data.ad, data && data.gizli);
+            if (!room) return ack({ hata: 'Oda oluşturulamadı, tekrar dene.' });
+            ack({ ok: true, kod: room.code });
+            broadcastLobby();
+        } catch (e) {
+            console.error('Oda kurma hatası:', e);
+            ack({ hata: 'Sunucu hatası.' });
+        }
+    });
+
+    socket.on('oda-katil', (data, ack) => {
+        if (typeof ack !== 'function') return;
+        try {
+            const kod = data && typeof data.kod === 'string' ? data.kod.trim().toUpperCase() : '';
+            const room = rooms.get(kod);
+            if (!room) return ack({ hata: 'Böyle bir oda bulunamadı.' });
+
+            if (socket.data.room && socket.data.room !== kod) leaveCurrentRoom(socket, true);
+            if (socket.data.room === kod) return ack({ ok: true, kod: room.code, ad: room.ad });
+
+            if (room.seatTimers[user.id]) { clearTimeout(room.seatTimers[user.id]); delete room.seatTimers[user.id]; }
+            if (room.deleteTimer) { clearTimeout(room.deleteTimer); room.deleteTimer = null; }
+
+            socket.leave('lobi');
+            socket.join(roomKey(kod));
+            socket.data.room = kod;
+            room.online[user.id] = (room.online[user.id] || 0) + 1;
+            const color = seat(room, user.id);
+
+            // Önce cevabı gönder, sonra oda verilerini (istemci sırayla işler)
+            ack({ ok: true, kod: room.code, ad: room.ad });
+            socket.emit('rol', color);
+            if (room.state) socket.emit('durum', room.state);
+            socket.emit('sohbet-gecmis', room.chat);
+            broadcastPlayers(room).catch((e) => console.error(e));
+        } catch (e) {
+            console.error('Odaya katılma hatası:', e);
+            ack({ hata: 'Sunucu hatası.' });
+        }
+    });
+
+    socket.on('oda-ayril', (a, b) => {
+        const ack = typeof a === 'function' ? a : b;
+        leaveCurrentRoom(socket, true);
+        socket.join('lobi');
+        socket.emit('odalar', roomList());
+        if (typeof ack === 'function') ack({ ok: true });
+    });
 
     socket.on('durum-gonder', async (raw) => {
         try {
-            const c = colorOf(user.id);
+            const room = rooms.get(socket.data.room);
+            if (!room) return;
+            const c = colorOf(room, user.id);
             if (c === null) return; // izleyiciler oyunu değiştiremez
             const s = cleanState(raw);
             if (!s) return;
 
-            const prev = state;
-            state = s;
-            socket.broadcast.emit('durum', s);
+            const prev = room.state;
+            room.state = s;
+            socket.to(roomKey(room.code)).emit('durum', s);
 
             const winner = s.off.p1 === 15 ? 1 : s.off.p2 === 15 ? -1 : null;
-            if (winner === null) { awarded = false; return; }
-            if (awarded || winner !== c) return;
+            if (winner === null) { room.awarded = false; return; }
+            if (room.awarded || winner !== c) return;
             const key = winner === 1 ? 'p1' : 'p2';
             if (!prev || !prev.off || prev.off[key] < 11) return; // tek hamlede 15'e sıçrayamaz
-            awarded = true;
-            await awardWin(winner, user.id);
+            room.awarded = true;
+            await awardWin(room, winner, user.id);
         } catch (e) {
             console.error('Durum hatası:', e);
         }
@@ -268,29 +433,21 @@ io.on('connection', async (socket) => {
 
     let lastChat = 0;
     socket.on('chat', (text) => {
-        if (typeof text !== 'string') return;
+        const room = rooms.get(socket.data.room);
+        if (!room || typeof text !== 'string') return;
         text = text.trim().slice(0, 200);
         if (!text) return;
         const now = Date.now();
         if (now - lastChat < 300) return;
         lastChat = now;
-        const msg = { renk: colorOf(user.id), isim: user.username, sid: socket.id, text };
-        chatHistory.push(msg);
-        if (chatHistory.length > 50) chatHistory.shift();
-        io.emit('chat', msg);
+        const msg = { renk: colorOf(room, user.id), isim: user.username, sid: socket.id, text };
+        room.chat.push(msg);
+        if (room.chat.length > 50) room.chat.shift();
+        io.to(roomKey(room.code)).emit('chat', msg);
     });
 
     socket.on('disconnect', () => {
-        online[user.id] = Math.max(0, (online[user.id] || 1) - 1);
-        if (online[user.id] === 0 && colorOf(user.id) !== null) {
-            // 2 dakika içinde dönmezse koltuğu boşalt
-            seatTimers[user.id] = setTimeout(() => {
-                if (players[1] === user.id) players[1] = null;
-                if (players['-1'] === user.id) players['-1'] = null;
-                if (!players[1] && !players['-1']) { state = null; awarded = false; }
-                broadcastPlayers().catch((e) => console.error(e));
-            }, 2 * 60 * 1000);
-        }
+        leaveCurrentRoom(socket, false);
     });
 });
 
