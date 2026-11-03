@@ -38,19 +38,39 @@
             box-shadow: inset 0 0 15px rgba(0,0,0,0.8), 0 15px 35px rgba(0,0,0,0.9);
             border: 12px solid #361f0c;
         }
+        :root {
+            --s1: #d4a373; --s2: #bc8a5f; --s3: #a47148;
+            --td1: #5c2018; --td2: #3b110b; --tl1: #e9c46a; --tl2: #c69d41;
+        }
+        /* Mağazadan alınan tahta temaları (sadece satın alanın kendi ekranında) */
+        [data-board="zumrut"]  { --s1:#4f8f6a; --s2:#3c7653; --s3:#2d5d41; --td1:#1d4d35; --td2:#0f3322; --tl1:#e8dba5; --tl2:#c9b36a; }
+        [data-board="gece"]    { --s1:#4a5a85; --s2:#38476e; --s3:#2b3858; --td1:#1b2447; --td2:#10163a; --tl1:#9fb4e8; --tl2:#7089c9; }
+        [data-board="kiraz"]   { --s1:#c98a6b; --s2:#b06e50; --s3:#965a40; --td1:#7a1f2b; --td2:#4c0f18; --tl1:#f0cfa0; --tl2:#d9a86f; }
+        [data-board="obsidyen"]{ --s1:#3a3a40; --s2:#2a2a30; --s3:#1f1f24; --td1:#1c1c22; --td2:#0a0a0d; --tl1:#b8b8c4; --tl2:#8a8a98; }
+
         .board-surface {
-            background: radial-gradient(circle at center, #d4a373 0%, #bc8a5f 70%, #a47148 100%);
+            background: radial-gradient(circle at center, var(--s1) 0%, var(--s2) 70%, var(--s3) 100%);
             box-shadow: inset 0 0 40px rgba(0,0,0,0.6);
         }
+        /* Mağazadan alınan taş stilleri (herkes görür) */
+        .checker-white.skin-altin  { background: radial-gradient(circle at 35% 35%, #fff6c2 0%, #f5c542 50%, #b8860b 100%); border-color: #ffe28a; color: #5a3d00; }
+        .checker-black.skin-altin  { background: radial-gradient(circle at 35% 35%, #e0a870 0%, #8b5a2b 50%, #4a2c11 100%); border-color: #c88a4a; color: #fff; }
+        .checker-white.skin-zumrut { background: radial-gradient(circle at 35% 35%, #eafff3 0%, #7fe0b0 50%, #2f9e6a 100%); border-color: #b6f2d2; color: #0b3a24; }
+        .checker-black.skin-zumrut { background: radial-gradient(circle at 35% 35%, #3fbf86 0%, #0f6b45 50%, #04301f 100%); border-color: #2f9e6a; color: #fff; }
+        .checker-white.skin-yakut  { background: radial-gradient(circle at 35% 35%, #d6e6ff 0%, #5b8def 50%, #1f4fbf 100%); border-color: #a9c7ff; color: #fff; }
+        .checker-black.skin-yakut  { background: radial-gradient(circle at 35% 35%, #ffa5a5 0%, #d02a3a 50%, #6b0a16 100%); border-color: #ff7b86; color: #fff; }
+        .checker-white.skin-neon   { background: radial-gradient(circle at 35% 35%, #e6ffff 0%, #22e5ff 50%, #0891b2 100%); border-color: #9af3ff; color: #033; box-shadow: 0 0 10px #22e5ff, 0 4px 6px rgba(0,0,0,0.5); }
+        .checker-black.skin-neon   { background: radial-gradient(circle at 35% 35%, #ffd6ff 0%, #e040fb 50%, #7b1fa2 100%); border-color: #f09bff; color: #fff; box-shadow: 0 0 10px #e040fb, 0 4px 6px rgba(0,0,0,0.5); }
+
         .board-divider {
             background: linear-gradient(to right, #1f1106, #3d230d, #1f1106);
             box-shadow: inset 0 0 10px rgba(0,0,0,0.9);
         }
 
-        .triangle-down-dark { clip-path: polygon(0 0, 100% 0, 50% 100%); background: linear-gradient(to bottom, #5c2018, #3b110b); }
-        .triangle-down-light { clip-path: polygon(0 0, 100% 0, 50% 100%); background: linear-gradient(to bottom, #e9c46a, #c69d41); }
-        .triangle-up-dark { clip-path: polygon(0 100%, 100% 100%, 50% 0); background: linear-gradient(to top, #5c2018, #3b110b); }
-        .triangle-up-light { clip-path: polygon(0 100%, 100% 100%, 50% 0); background: linear-gradient(to top, #e9c46a, #c69d41); }
+        .triangle-down-dark { clip-path: polygon(0 0, 100% 0, 50% 100%); background: linear-gradient(to bottom, var(--td1), var(--td2)); }
+        .triangle-down-light { clip-path: polygon(0 0, 100% 0, 50% 100%); background: linear-gradient(to bottom, var(--tl1), var(--tl2)); }
+        .triangle-up-dark { clip-path: polygon(0 100%, 100% 100%, 50% 0); background: linear-gradient(to top, var(--td1), var(--td2)); }
+        .triangle-up-light { clip-path: polygon(0 100%, 100% 100%, 50% 0); background: linear-gradient(to top, var(--tl1), var(--tl2)); }
 
         .point-highlight { filter: drop-shadow(0 0 8px rgba(74, 222, 128, 0.9)); cursor: pointer; }
 
@@ -136,6 +156,27 @@
         </div>
     </div>
 
+    <!-- MAĞAZA -->
+    <div id="shop-modal" class="hidden fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4">
+        <div class="wood-border rounded-2xl p-5 w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="title-font text-xl text-amber-400"><i class="fa-solid fa-store"></i> MAĞAZA</h2>
+                <div class="flex items-center gap-4">
+                    <span id="shop-gold" class="text-yellow-300 font-bold text-sm"></span>
+                    <button onclick="closeShop()" title="Kapat" class="text-amber-200/70 hover:text-amber-200 text-xl leading-none">✕</button>
+                </div>
+            </div>
+            <div class="flex gap-1 bg-black/40 rounded-lg p-1 mb-3">
+                <button id="shop-tab-tahta" onclick="setShopTab('tahta')" class="flex-1 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition">Tahta</button>
+                <button id="shop-tab-tas" onclick="setShopTab('tas')" class="flex-1 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition">Taşlar</button>
+                <button id="shop-tab-renk" onclick="setShopTab('renk')" class="flex-1 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition">İsim Rengi</button>
+            </div>
+            <p id="shop-note" class="text-[11px] text-amber-200/60 mb-2"></p>
+            <p id="shop-msg" class="text-xs text-red-400 min-h-[16px] mb-2"></p>
+            <div id="shop-grid" class="overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-3 pr-1"></div>
+        </div>
+    </div>
+
     <!-- KAZANMA PENCERESİ -->
     <div id="win-modal" class="hidden fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
         <div class="wood-border rounded-2xl p-8 w-full max-w-sm text-center">
@@ -161,7 +202,7 @@
 
         <div id="header-players" class="hidden flex items-center gap-6 bg-black/50 px-6 py-2 rounded-xl border border-amber-800/30">
             <div id="player1-card" class="flex items-center gap-3 transition-all duration-300">
-                <div class="w-6 h-6 rounded-full checker-white border border-gray-400 shadow"></div>
+                <div id="p1-dot" class="w-6 h-6 rounded-full checker-white border border-gray-400 shadow"></div>
                 <div>
                     <div id="p1-name" class="text-xs font-semibold text-gray-300">OYUNCU 1</div>
                     <div class="text-sm font-bold text-amber-400" id="p1-score">Toplanan: 0/15</div>
@@ -170,7 +211,7 @@
             </div>
             <div class="h-8 w-px bg-amber-900/50"></div>
             <div id="player2-card" class="flex items-center gap-3 opacity-50 transition-all duration-300">
-                <div class="w-6 h-6 rounded-full checker-black border border-gray-600 shadow"></div>
+                <div id="p2-dot" class="w-6 h-6 rounded-full checker-black border border-gray-600 shadow"></div>
                 <div>
                     <div id="p2-name" class="text-xs font-semibold text-gray-300">OYUNCU 2</div>
                     <div class="text-sm font-bold text-amber-400" id="p2-score">Toplanan: 0/15</div>
@@ -183,6 +224,7 @@
             <div id="account-chip" style="display:none" class="items-center gap-2 bg-black/50 px-3 py-1.5 rounded-xl border border-amber-800/30 text-xs">
                 <span id="acc-name" class="font-semibold text-amber-200 max-w-[110px] truncate"></span>
                 <span id="acc-gold" class="text-yellow-300 font-bold"></span>
+                <button onclick="openShop()" title="Mağaza" class="text-amber-200/80 hover:text-amber-300"><i class="fa-solid fa-store"></i></button>
                 <button onclick="logout()" title="Çıkış yap" class="text-amber-200/60 hover:text-amber-300"><i class="fa-solid fa-right-from-bracket"></i></button>
             </div>
             <div id="game-buttons" class="hidden flex items-center gap-3">
@@ -210,6 +252,9 @@
         <div class="text-center mb-5">
             <h2 class="title-font text-2xl text-amber-400">LOBİ</h2>
             <p class="text-xs text-amber-200/60">Bir oda kur ya da açık bir odaya katıl</p>
+            <button onclick="openShop()" class="mt-3 bg-stone-800 hover:bg-stone-700 text-amber-200 text-xs font-bold px-4 py-1.5 rounded-lg border border-amber-900/40 transition">
+                <i class="fa-solid fa-store"></i> MAĞAZA
+            </button>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
@@ -368,7 +413,8 @@
                 try { kod = sessionStorage.getItem('roomKod'); } catch (e) {}
                 if (kod) joinRoom(kod, true); else showLobby();
             });
-            socket.on('hesap', (a) => { myAccount = a; renderAccount(); });
+            socket.on('hesap', (a) => { myAccount = a; renderAccount(); applyMyBoard(a); });
+            socket.on('kozmetik', (k) => applyCosmetics(k));
             socket.on('kazanc', (k) => {
                 const el = document.getElementById('win-gold');
                 el.textContent = (k.renk === myColor)
@@ -404,6 +450,7 @@
             const who = document.createElement('span');
             who.className = 'text-[10px] text-amber-200/50';
             who.textContent = mine ? 'Sen' : name;
+            if (m.isimRengi && NAME_COLORS[m.isimRengi]) who.style.color = NAME_COLORS[m.isimRengi];
 
             const bubble = document.createElement('span');
             bubble.className = 'px-2.5 py-1 rounded-lg text-xs max-w-[85%] break-words ' +
@@ -470,6 +517,189 @@
             document.getElementById('p2-name').textContent = o['-1'] ? o['-1'] : 'OYUNCU 2';
         }
 
+        /* ---------------------------- Kozmetikler ---------------------------- */
+        const NAME_COLORS = {
+            renk_kirmizi: '#f87171', renk_mavi: '#60a5fa', renk_yesil: '#4ade80',
+            renk_mor: '#c084fc', renk_altin: '#fbbf24'
+        };
+        let cosmetics = { 1: {}, '-1': {} };
+
+        function skinFor(color) {
+            const c = cosmetics[color === 'white' ? 1 : -1] || {};
+            return c.tas ? ' skin-' + c.tas.slice(4) : '';
+        }
+
+        function applyCosmetics(k) {
+            cosmetics = { 1: (k && k[1]) || {}, '-1': (k && k['-1']) || {} };
+            document.getElementById('p1-name').style.color = NAME_COLORS[cosmetics[1].renk] || '';
+            document.getElementById('p2-name').style.color = NAME_COLORS[cosmetics['-1'].renk] || '';
+            document.getElementById('p1-dot').className = 'w-6 h-6 rounded-full checker-white border border-gray-400 shadow' + skinFor('white');
+            document.getElementById('p2-dot').className = 'w-6 h-6 rounded-full checker-black border border-gray-600 shadow' + skinFor('black');
+            renderBoard();
+        }
+
+        function applyMyBoard(a) {
+            const t = a && a.kusanilan && a.kusanilan.tahta;
+            if (t) document.body.setAttribute('data-board', t.slice(6));
+            else document.body.removeAttribute('data-board');
+        }
+
+        /* ------------------------------ Mağaza ------------------------------ */
+        let shop = null;
+        let shopTab = 'tahta';
+        const SHOP_NOTES = {
+            tahta: 'Tahta teması sadece senin ekranında görünür.',
+            tas: 'Taş stilin rakibine ve izleyicilere de görünür.',
+            renk: 'İsim rengin oyuncu kartında ve sohbette görünür.'
+        };
+
+        async function shopFetch(path, body) {
+            const opt = { headers: { 'Authorization': 'Bearer ' + authToken } };
+            if (body) {
+                opt.method = 'POST';
+                opt.headers['Content-Type'] = 'application/json';
+                opt.body = JSON.stringify(body);
+            }
+            const r = await fetch(path, opt);
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(d.hata || 'Bir hata oluştu.');
+            return d;
+        }
+
+        function setShopMsg(msg) { document.getElementById('shop-msg').textContent = msg || ''; }
+
+        async function openShop() {
+            if (!authToken) return;
+            setShopMsg('');
+            document.getElementById('shop-modal').classList.remove('hidden');
+            try {
+                shop = await shopFetch('/api/magaza');
+                renderShop();
+            } catch (e) {
+                setShopMsg(e.message);
+            }
+        }
+
+        function closeShop() {
+            document.getElementById('shop-modal').classList.add('hidden');
+        }
+
+        function setShopTab(t) {
+            shopTab = t;
+            setShopMsg('');
+            renderShop();
+        }
+
+        function shopPreview(kat, id) {
+            const key = id ? id.split('_')[1] : '';
+            if (kat === 'tahta') {
+                const wrap = document.createElement('div');
+                if (key) wrap.setAttribute('data-board', key);
+                wrap.className = 'w-full rounded-lg overflow-hidden border border-amber-950/60';
+                const surf = document.createElement('div');
+                surf.className = 'board-surface';
+                surf.style.cssText = 'display:flex;height:52px;padding:0';
+                for (let i = 0; i < 6; i++) {
+                    const t = document.createElement('div');
+                    t.className = 'triangle-down-' + (i % 2 === 0 ? 'dark' : 'light');
+                    t.style.cssText = 'flex:1;height:100%';
+                    surf.appendChild(t);
+                }
+                wrap.appendChild(surf);
+                return wrap;
+            }
+            if (kat === 'tas') {
+                const wrap = document.createElement('div');
+                wrap.className = 'flex gap-2 items-center justify-center h-[52px]';
+                ['white', 'black'].forEach((c) => {
+                    const ch = document.createElement('div');
+                    ch.className = 'checker checker-' + c + (key ? ' skin-' + key : '');
+                    ch.style.cssText = 'width:32px;height:32px;margin:0';
+                    wrap.appendChild(ch);
+                });
+                return wrap;
+            }
+            const span = document.createElement('div');
+            span.className = 'h-[52px] flex items-center justify-center font-bold text-base';
+            span.style.color = NAME_COLORS[id] || '#d1d5db';
+            span.textContent = (myAccount && myAccount.username) || 'İsmin';
+            return span;
+        }
+
+        function renderShop() {
+            if (!shop) return;
+            document.getElementById('shop-gold').textContent = '🪙 ' + shop.altin;
+            document.getElementById('shop-note').textContent = SHOP_NOTES[shopTab];
+            ['tahta', 'tas', 'renk'].forEach((k) => {
+                document.getElementById('shop-tab-' + k).className =
+                    'flex-1 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition ' +
+                    (k === shopTab ? 'bg-amber-700 text-white' : 'text-amber-200/60 hover:text-amber-200');
+            });
+
+            const grid = document.getElementById('shop-grid');
+            grid.innerHTML = '';
+            const items = [{ id: null, ad: 'Varsayılan', fiyat: 0 }].concat(shop.katalog.filter((i) => i.kat === shopTab));
+            const equipped = shop.kusanilan[shopTab] || null;
+
+            items.forEach((it) => {
+                const owned = it.id === null || shop.sahip.includes(it.id);
+                const isEq = (equipped === it.id);
+
+                const card = document.createElement('div');
+                card.className = 'flex flex-col items-center gap-2 bg-stone-900/70 rounded-xl p-3 border ' +
+                    (isEq ? 'border-amber-400/70' : 'border-amber-900/30');
+                card.appendChild(shopPreview(shopTab, it.id));
+
+                const name = document.createElement('div');
+                name.className = 'text-xs font-semibold text-amber-100 text-center';
+                name.textContent = it.ad;
+                card.appendChild(name);
+
+                const btn = document.createElement('button');
+                btn.className = 'w-full py-1.5 rounded-lg text-xs font-bold border transition ';
+                if (isEq) {
+                    btn.textContent = 'KUŞANILDI';
+                    btn.className += 'bg-black/30 text-amber-300 border-amber-500/40 cursor-default';
+                    btn.disabled = true;
+                } else if (owned) {
+                    btn.textContent = 'KUŞAN';
+                    btn.className += 'bg-stone-800 hover:bg-stone-700 text-amber-200 border-amber-900/40';
+                    btn.onclick = () => equipItem(shopTab, it.id);
+                } else {
+                    const afford = shop.altin >= it.fiyat;
+                    btn.textContent = '🪙 ' + it.fiyat + ' · SATIN AL';
+                    btn.className += afford
+                        ? 'bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white border-amber-400/30'
+                        : 'bg-black/30 text-gray-500 border-amber-900/20 cursor-not-allowed';
+                    btn.disabled = !afford;
+                    btn.title = afford ? '' : 'Yeterli altının yok';
+                    btn.onclick = () => buyItem(it.id);
+                }
+                card.appendChild(btn);
+                grid.appendChild(card);
+            });
+        }
+
+        async function buyItem(id) {
+            setShopMsg('');
+            try {
+                shop = await shopFetch('/api/satin-al', { id });
+                renderShop();
+            } catch (e) {
+                setShopMsg(e.message);
+            }
+        }
+
+        async function equipItem(kat, id) {
+            setShopMsg('');
+            try {
+                shop = await shopFetch('/api/kusan', { kat, id });
+                renderShop();
+            } catch (e) {
+                setShopMsg(e.message);
+            }
+        }
+
         /* ------------------------------ Odalar ------------------------------ */
         let currentRoom = null;
 
@@ -503,6 +733,7 @@
             myColor = null;
             applyNames({ 1: null, '-1': null });
             applyGold({ 1: null, '-1': null });
+            applyCosmetics({ 1: {}, '-1': {} });
             document.getElementById('chat-box').innerHTML = '';
             document.getElementById('emoji-panel').classList.add('hidden');
             initGame(false);
@@ -902,7 +1133,7 @@
                 const visibleCount = Math.min(checkersCount, 5);
                 for (let c = 0; c < visibleCount; c++) {
                     const ch = document.createElement('div');
-                    ch.className = `checker checker-${checkerColor}`;
+                    ch.className = `checker checker-${checkerColor}${skinFor(checkerColor)}`;
                     if (selectedPoint === index && c === visibleCount - 1) ch.classList.add('selected');
                     if (c === visibleCount - 1 && checkersCount > 1) ch.innerText = checkersCount;
                     stack.appendChild(ch);
@@ -920,13 +1151,13 @@
 
             for (let i = 0; i < bar.p1; i++) {
                 const ch = document.createElement('div');
-                ch.className = `checker checker-white ${selectedPoint === 'bar' && turn === 1 ? 'selected' : ''}`;
+                ch.className = `checker checker-white${skinFor('white')} ${selectedPoint === 'bar' && turn === 1 ? 'selected' : ''}`;
                 if (turn === 1) ch.onclick = () => selectBar();
                 barP1.appendChild(ch);
             }
             for (let i = 0; i < bar.p2; i++) {
                 const ch = document.createElement('div');
-                ch.className = `checker checker-black ${selectedPoint === 'bar' && turn === -1 ? 'selected' : ''}`;
+                ch.className = `checker checker-black${skinFor('black')} ${selectedPoint === 'bar' && turn === -1 ? 'selected' : ''}`;
                 if (turn === -1) ch.onclick = () => selectBar();
                 barP2.appendChild(ch);
             }
@@ -940,12 +1171,12 @@
 
             for (let i = 0; i < off.p1; i++) {
                 const ch = document.createElement('div');
-                ch.className = 'w-5 h-5 rounded-full checker-white border border-gray-400';
+                ch.className = 'w-5 h-5 rounded-full checker-white border border-gray-400' + skinFor('white');
                 offP1.appendChild(ch);
             }
             for (let i = 0; i < off.p2; i++) {
                 const ch = document.createElement('div');
-                ch.className = 'w-5 h-5 rounded-full checker-black border border-gray-600';
+                ch.className = 'w-5 h-5 rounded-full checker-black border border-gray-600' + skinFor('black');
                 offP2.appendChild(ch);
             }
 

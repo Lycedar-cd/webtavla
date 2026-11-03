@@ -8,6 +8,25 @@ const { Server } = require('socket.io');
 
 const WIN_GOLD = 100; // her galibiyette kazanılan altın
 
+// Mağaza kataloğu. Fiyatlar sadece burada belirlenir, istemci fiyat gönderemez.
+const CATALOG = [
+    { id: 'tahta_zumrut',  kat: 'tahta', ad: 'Zümrüt Orman',    fiyat: 300 },
+    { id: 'tahta_gece',    kat: 'tahta', ad: 'Gece Mavisi',     fiyat: 300 },
+    { id: 'tahta_kiraz',   kat: 'tahta', ad: 'Kiraz Ağacı',     fiyat: 400 },
+    { id: 'tahta_obsidyen', kat: 'tahta', ad: 'Obsidyen',       fiyat: 600 },
+    { id: 'tas_altin',     kat: 'tas',   ad: 'Altın Taşlar',    fiyat: 500 },
+    { id: 'tas_zumrut',    kat: 'tas',   ad: 'Zümrüt Taşlar',   fiyat: 400 },
+    { id: 'tas_yakut',     kat: 'tas',   ad: 'Safir & Yakut',   fiyat: 500 },
+    { id: 'tas_neon',      kat: 'tas',   ad: 'Neon Taşlar',     fiyat: 600 },
+    { id: 'renk_kirmizi',  kat: 'renk',  ad: 'Kırmızı İsim',    fiyat: 150 },
+    { id: 'renk_mavi',     kat: 'renk',  ad: 'Mavi İsim',       fiyat: 150 },
+    { id: 'renk_yesil',    kat: 'renk',  ad: 'Yeşil İsim',      fiyat: 150 },
+    { id: 'renk_mor',      kat: 'renk',  ad: 'Mor İsim',        fiyat: 200 },
+    { id: 'renk_altin',    kat: 'renk',  ad: 'Altın İsim',      fiyat: 300 }
+];
+const CATALOG_BY_ID = Object.fromEntries(CATALOG.map((i) => [i.id, i]));
+const CATEGORIES = ['tahta', 'tas', 'renk'];
+
 if (!process.env.DATABASE_URL) {
     console.error('HATA: DATABASE_URL tanımlı değil. Neon bağlantı adresini ortam değişkeni olarak ekleyin.');
     process.exit(1);
@@ -62,7 +81,37 @@ async function userFromToken(token) {
     const row = r.rows[0];
     const ageMs = Date.now() - new Date(row.created_at).getTime();
     if (ageMs > 90 * 24 * 60 * 60 * 1000) return null; // 90 gün sonra tekrar giriş
-    return { id: row.id, username: row.username, gold: row.gold, wins: row.wins };
+    return {
+        id: row.id, username: row.username, gold: row.gold, wins: row.wins,
+        kusanilan: await loadEquipped(row.id)
+    };
+}
+
+async function loadEquipped(userId, db) {
+    const r = await (db || pool).query('SELECT item_id FROM inventory WHERE user_id = $1 AND equipped = true', [userId]);
+    const out = { tahta: null, tas: null, renk: null };
+    r.rows.forEach((row) => {
+        const it = CATALOG_BY_ID[row.item_id];
+        if (it) out[it.kat] = it.id;
+    });
+    return out;
+}
+
+async function shopState(userId) {
+    const g = await pool.query('SELECT gold FROM users WHERE id = $1', [userId]);
+    const inv = await pool.query('SELECT item_id FROM inventory WHERE user_id = $1', [userId]);
+    return {
+        altin: g.rows[0] ? g.rows[0].gold : 0,
+        katalog: CATALOG,
+        sahip: inv.rows.map((r) => r.item_id).filter((id) => CATALOG_BY_ID[id]),
+        kusanilan: await loadEquipped(userId)
+    };
+}
+
+async function authReq(req) {
+    const h = req.headers.authorization || '';
+    const m = /^Bearer ([0-9a-f]{64})$/.exec(h);
+    return m ? userFromToken(m[1]) : null;
 }
 
 function validUsername(u) {
@@ -119,6 +168,100 @@ app.post('/api/giris', async (req, res) => {
     } catch (e) {
         console.error('Giriş hatası:', e);
         res.status(500).json({ hata: 'Sunucu hatası, tekrar dene.' });
+    }
+});
+
+app.get('/api/magaza', async (req, res) => {
+    try {
+        const user = await authReq(req);
+        if (!user) return res.status(401).json({ hata: 'Giriş yapmalısın.' });
+        res.json(await shopState(user.id));
+    } catch (e) {
+        console.error('Mağaza hatası:', e);
+        res.status(500).json({ hata: 'Sunucu hatası.' });
+    }
+});
+
+app.post('/api/satin-al', async (req, res) => {
+    let client;
+    try {
+        const user = await authReq(req);
+        if (!user) return res.status(401).json({ hata: 'Giriş yapmalısın.' });
+        const item = CATALOG_BY_ID[req.body && req.body.id];
+        if (!item) return res.status(400).json({ hata: 'Böyle bir eşya yok.' });
+
+        client = await pool.connect();
+        await client.query('BEGIN');
+
+        // 1) Önce eşyayı envantere yaz. Aynı eşya için ikinci bir istek burada reddedilir (altın hiç düşülmez).
+        try {
+            await client.query('INSERT INTO inventory (user_id, item_id, equipped) VALUES ($1, $2, false)', [user.id, item.id]);
+        } catch (e) {
+            if (e.code === '23505') {
+                try { await client.query('ROLLBACK'); } catch (_) {}
+                return res.status(409).json({ hata: 'Bu eşyaya zaten sahipsin.' });
+            }
+            throw e;
+        }
+
+        // 2) Altın, tek sorguda hem kontrol edilir hem düşülür (eksiye düşmez)
+        const upd = await client.query(
+            'UPDATE users SET gold = gold + $1 WHERE id = $2 AND gold >= $3 RETURNING gold',
+            [-item.fiyat, user.id, item.fiyat]);
+        if (!upd.rows.length) {
+            // Altın yetmedi: eşyayı geri al (ROLLBACK'e ek olarak açıkça siliyoruz)
+            await client.query('DELETE FROM inventory WHERE user_id = $1 AND item_id = $2', [user.id, item.id]);
+            try { await client.query('ROLLBACK'); } catch (_) {}
+            return res.status(402).json({ hata: 'Yeterli altının yok.' });
+        }
+        await client.query('COMMIT');
+
+        await refreshUser(user.id);
+        res.json(await shopState(user.id));
+    } catch (e) {
+        if (client) { try { await client.query('ROLLBACK'); } catch (_) {} }
+        if (e.code === '23505') return res.status(409).json({ hata: 'Bu eşyaya zaten sahipsin.' });
+        console.error('Satın alma hatası:', e);
+        res.status(500).json({ hata: 'Sunucu hatası.' });
+    } finally {
+        if (client) client.release();
+    }
+});
+
+app.post('/api/kusan', async (req, res) => {
+    let client;
+    try {
+        const user = await authReq(req);
+        if (!user) return res.status(401).json({ hata: 'Giriş yapmalısın.' });
+        const kat = req.body && req.body.kat;
+        const id = req.body && req.body.id; // null: varsayılana dön
+        if (!CATEGORIES.includes(kat)) return res.status(400).json({ hata: 'Geçersiz kategori.' });
+        let item = null;
+        if (id !== null && id !== undefined) {
+            item = CATALOG_BY_ID[id];
+            if (!item || item.kat !== kat) return res.status(400).json({ hata: 'Böyle bir eşya yok.' });
+            const own = await pool.query('SELECT 1 FROM inventory WHERE user_id = $1 AND item_id = $2', [user.id, id]);
+            if (!own.rows.length) return res.status(403).json({ hata: 'Bu eşyaya sahip değilsin.' });
+        }
+
+        client = await pool.connect();
+        await client.query('BEGIN');
+        for (const it of CATALOG.filter((i) => i.kat === kat)) {
+            await client.query('UPDATE inventory SET equipped = false WHERE user_id = $1 AND item_id = $2', [user.id, it.id]);
+        }
+        if (item) {
+            await client.query('UPDATE inventory SET equipped = true WHERE user_id = $1 AND item_id = $2', [user.id, item.id]);
+        }
+        await client.query('COMMIT');
+
+        await refreshUser(user.id);
+        res.json(await shopState(user.id));
+    } catch (e) {
+        if (client) { try { await client.query('ROLLBACK'); } catch (_) {} }
+        console.error('Kuşanma hatası:', e);
+        res.status(500).json({ hata: 'Sunucu hatası.' });
+    } finally {
+        if (client) client.release();
     }
 });
 
@@ -270,6 +413,13 @@ async function broadcastPlayers(room) {
     }
     const pick = (c, f) => (by[room.players[c]] ? by[room.players[c]][f] : null);
     const key = roomKey(room.code);
+    const koz = {};
+    for (const c of [1, -1]) {
+        const id = room.players[c];
+        const eq = id ? await loadEquipped(id) : { tas: null, renk: null };
+        koz[c] = { tas: eq.tas, renk: eq.renk };
+    }
+    io.to(key).emit('kozmetik', koz);
     io.to(key).emit('oyuncular', { 1: pick(1, 'username'), '-1': pick(-1, 'username') });
     io.to(key).emit('altinlar', { 1: pick(1, 'gold'), '-1': pick(-1, 'gold') });
     broadcastLobby();
@@ -278,10 +428,22 @@ async function broadcastPlayers(room) {
 async function sendAccountToUser(userId) {
     const r = await pool.query('SELECT username, gold, wins FROM users WHERE id = $1', [userId]);
     if (!r.rows[0]) return;
+    const kusanilan = await loadEquipped(userId);
     const sockets = await io.fetchSockets();
     sockets.forEach((s) => {
-        if (s.data.user && s.data.user.id === userId) s.emit('hesap', r.rows[0]);
+        if (s.data.user && s.data.user.id === userId) {
+            s.data.user.kusanilan = kusanilan;
+            s.emit('hesap', { ...r.rows[0], kusanilan });
+        }
     });
+}
+
+// Satın alma ya da kuşanma sonrası: hesap kutusunu yenile, oturduğu odalara yeni görünümü yay
+async function refreshUser(userId) {
+    await sendAccountToUser(userId);
+    for (const room of rooms.values()) {
+        if (colorOf(room, userId) !== null) await broadcastPlayers(room);
+    }
 }
 
 async function awardWin(room, winnerColor, userId) {
@@ -342,7 +504,7 @@ io.on('connection', (socket) => {
     socket.data.room = null;
 
     socket.join('lobi');
-    socket.emit('hesap', { username: user.username, gold: user.gold, wins: user.wins });
+    socket.emit('hesap', { username: user.username, gold: user.gold, wins: user.wins, kusanilan: user.kusanilan });
     socket.emit('odalar', roomList());
 
     let lastCreate = 0;
@@ -440,7 +602,10 @@ io.on('connection', (socket) => {
         const now = Date.now();
         if (now - lastChat < 300) return;
         lastChat = now;
-        const msg = { renk: colorOf(room, user.id), isim: user.username, sid: socket.id, text };
+        const msg = {
+            renk: colorOf(room, user.id), isim: user.username, sid: socket.id, text,
+            isimRengi: (socket.data.user.kusanilan && socket.data.user.kusanilan.renk) || null
+        };
         room.chat.push(msg);
         if (room.chat.length > 50) room.chat.shift();
         io.to(roomKey(room.code)).emit('chat', msg);
@@ -467,6 +632,12 @@ async function init() {
         token_hash TEXT PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS inventory (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        item_id TEXT NOT NULL,
+        equipped BOOLEAN NOT NULL DEFAULT false,
+        PRIMARY KEY (user_id, item_id)
     )`);
     const PORT = process.env.PORT || 3000;
     server.listen(PORT, () => console.log('Sunucu çalışıyor: http://localhost:' + PORT));
