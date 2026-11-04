@@ -136,7 +136,8 @@
         /* ---------------- MOBİL / TABLET ---------------- */
         @media (max-width: 1023px) {
             :root { --ck: clamp(18px, calc((100vw - 46px) / 13 - 3px), 38px); }
-            body { padding: 6px 6px max(6px, env(safe-area-inset-bottom)) !important; }
+            html { overflow-x: hidden; }
+            body { padding: 6px 6px calc(env(safe-area-inset-bottom) + 70px) !important; max-width: 100vw; }
 
             .wood-border { border-width: 5px; }
             #game-view .wood-border { padding: 4px !important; }
@@ -152,7 +153,11 @@
             #dice-container { gap: 10px !important; padding: 4px 12px !important; }
 
             header { padding: 10px !important; gap: 8px !important; margin-bottom: 8px !important; }
+            header { max-width: 100%; }
             header h1 { font-size: 1.05rem; }
+            #p1-score, #p2-score { font-size: 11px; white-space: nowrap; }
+            #btn-roll, #btn-roll span, #room-chip { white-space: nowrap; }
+            #game-buttons > button { flex-shrink: 0; }
             header .fa-dice-d6 { font-size: 1.5rem; }
             header > div:first-child p { display: none; }
             #header-players { width: 100%; justify-content: space-between; padding: 6px 10px; gap: 8px; }
@@ -268,6 +273,11 @@
                 </div>
             </div>
         </div>
+
+        <!-- Büyük mağaza butonu (telefon/tablet, sadece oyun ekranında) -->
+        <button id="shop-big" onclick="openShop()" class="hidden flex lg:!hidden w-full items-center justify-center gap-2 bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white font-bold text-base py-3 rounded-xl border border-amber-400/30 shadow-lg transition active:scale-95">
+            <i class="fa-solid fa-store"></i> MAĞAZA
+        </button>
 
         <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
             <div id="account-chip" style="display:none" class="items-center gap-2 bg-black/50 px-3 py-1.5 rounded-xl border border-amber-800/30 text-xs">
@@ -761,6 +771,7 @@
             show('lobby-view', true);
             show('game-view', false);
             show('header-players', false);
+            show('shop-big', false);
             show('game-buttons', false);
             hideWin();
             updateUI();
@@ -770,6 +781,7 @@
             show('lobby-view', false);
             show('game-view', true);
             show('header-players', true);
+            show('shop-big', true);
             show('game-buttons', true);
             setLobbyError('');
         }
