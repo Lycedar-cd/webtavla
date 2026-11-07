@@ -123,6 +123,17 @@
             justify-self: center; align-self: center;
             box-shadow: inset 0 1px 1px rgba(0,0,0,0.8);
         }
+        /* Mağazadan alınan zar stilleri */
+        .dice.zar-altin    { background: radial-gradient(circle at 30% 30%, #fff1a8, #f5c542 55%, #b8860b); }
+        .dice.zar-altin .dot    { background-color: #4a2c00; }
+        .dice.zar-kirmizi  { background: radial-gradient(circle at 30% 30%, #ff7b7b, #c0161f 60%, #7a0a10); }
+        .dice.zar-kirmizi .dot  { background-color: #ffffff; box-shadow: none; }
+        .dice.zar-kristal  { background: radial-gradient(circle at 30% 30%, #f0ffff, #a5e8ff 55%, #5cb8e6); box-shadow: 0 5px 12px rgba(80,180,230,0.5), inset 0 0 8px rgba(255,255,255,0.8); }
+        .dice.zar-kristal .dot  { background-color: #0b3a5a; }
+        .dice.zar-obsidyen { background: radial-gradient(circle at 30% 30%, #4a4a52, #1b1b20 60%, #0a0a0d); }
+        .dice.zar-obsidyen .dot { background-color: #f5c542; box-shadow: none; }
+        .dice.zar-neon     { background: radial-gradient(circle at 30% 30%, #2a1540, #12081f); box-shadow: 0 0 14px #ff2bd6, inset 0 0 6px #ff2bd6; }
+        .dice.zar-neon .dot     { background-color: #ff6af0; box-shadow: 0 0 6px #ff2bd6; }
         .dice-rolling { animation: roll 0.6s ease-out; }
         @keyframes roll {
             0% { transform: rotate(0deg) scale(0.6); }
@@ -223,6 +234,7 @@
             <div class="flex gap-1 bg-black/40 rounded-lg p-1 mb-3">
                 <button id="shop-tab-tahta" onclick="setShopTab('tahta')" class="flex-1 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition">Tahta</button>
                 <button id="shop-tab-tas" onclick="setShopTab('tas')" class="flex-1 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition">Taşlar</button>
+                <button id="shop-tab-zar" onclick="setShopTab('zar')" class="flex-1 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition">Zarlar</button>
                 <button id="shop-tab-renk" onclick="setShopTab('renk')" class="flex-1 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition">İsim Rengi</button>
             </div>
             <p id="shop-note" class="text-[11px] text-amber-200/60 mb-2"></p>
@@ -459,6 +471,7 @@
         let myColor = null;     // 1 Beyaz, -1 Siyah, null izleyici
         let logHistory = [];
         let rollId = 0;
+        let diceBy = 1;      // son zarı atan oyuncu (zar stili için)
         let shownRollId = 0;
 
         if (socket) {
@@ -595,6 +608,7 @@
             document.getElementById('p1-dot').className = 'w-6 h-6 rounded-full checker-white border border-gray-400 shadow' + skinFor('white');
             document.getElementById('p2-dot').className = 'w-6 h-6 rounded-full checker-black border border-gray-600 shadow' + skinFor('black');
             renderBoard();
+            if (dice.length) renderDiceVisuals(false);
         }
 
         function applyMyBoard(a) {
@@ -609,6 +623,7 @@
         const SHOP_NOTES = {
             tahta: 'Tahta teması sadece senin ekranında görünür.',
             tas: 'Taş stilin rakibine ve izleyicilere de görünür.',
+            zar: 'Attığın zarlar bu stille herkese görünür.',
             renk: 'İsim rengin oyuncu kartında ve sohbette görünür.'
         };
 
@@ -678,6 +693,13 @@
                 });
                 return wrap;
             }
+            if (kat === 'zar') {
+                const wrap = document.createElement('div');
+                wrap.className = 'flex gap-3 items-center justify-center h-[52px]';
+                wrap.appendChild(makeDiceEl(5, key, false));
+                wrap.appendChild(makeDiceEl(2, key, false));
+                return wrap;
+            }
             const span = document.createElement('div');
             span.className = 'h-[52px] flex items-center justify-center font-bold text-base';
             span.style.color = NAME_COLORS[id] || '#d1d5db';
@@ -689,7 +711,7 @@
             if (!shop) return;
             document.getElementById('shop-gold').textContent = '🪙 ' + shop.altin;
             document.getElementById('shop-note').textContent = SHOP_NOTES[shopTab];
-            ['tahta', 'tas', 'renk'].forEach((k) => {
+            ['tahta', 'tas', 'zar', 'renk'].forEach((k) => {
                 document.getElementById('shop-tab-' + k).className =
                     'flex-1 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition ' +
                     (k === shopTab ? 'bg-amber-700 text-white' : 'text-amber-200/60 hover:text-amber-200');
@@ -1019,7 +1041,7 @@
         function canAct() { return !isGameOver() && (!socket || myColor === turn); }
 
         function getState() {
-            return { board, turn, bar, off, dice, movesLeft, logHistory, rollId };
+            return { board, turn, bar, off, dice, movesLeft, logHistory, rollId, diceBy };
         }
 
         function syncState() {
@@ -1030,6 +1052,7 @@
             board = st.board; turn = st.turn; bar = st.bar; off = st.off;
             dice = st.dice; movesLeft = st.movesLeft; logHistory = st.logHistory;
             rollId = st.rollId;
+            diceBy = st.diceBy === -1 ? -1 : 1;
             selectedPoint = null;
 
             renderLog();
@@ -1257,6 +1280,7 @@
             const who = pname(turn);
 
             dice = [d1, d2];
+            diceBy = turn;
             if (d1 === d2) {
                 movesLeft = [d1, d1, d1, d1];
                 log(`${who} ÇİFT attı! [${d1}-${d2}]`);
@@ -1278,25 +1302,28 @@
             }
         }
 
-        function renderDiceVisuals() {
+        const DOT_POSITIONS = {
+            1: [4], 2: [0, 8], 3: [0, 4, 8],
+            4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8]
+        };
+
+        function makeDiceEl(val, key, animate) {
+            const el = document.createElement('div');
+            el.className = 'dice' + (animate ? ' dice-rolling' : '') + (key ? ' zar-' + key : '');
+            for (let i = 0; i < 9; i++) {
+                const dot = document.createElement('div');
+                if (DOT_POSITIONS[val].includes(i)) dot.className = 'dot';
+                el.appendChild(dot);
+            }
+            return el;
+        }
+
+        function renderDiceVisuals(animate = true) {
             const container = document.getElementById('dice-container');
             container.innerHTML = '';
-
-            const dotPositions = {
-                1: [4], 2: [0, 8], 3: [0, 4, 8],
-                4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8]
-            };
-
-            dice.forEach(val => {
-                const diceEl = document.createElement('div');
-                diceEl.className = 'dice dice-rolling';
-                for (let i = 0; i < 9; i++) {
-                    const dot = document.createElement('div');
-                    if (dotPositions[val].includes(i)) dot.className = 'dot';
-                    diceEl.appendChild(dot);
-                }
-                container.appendChild(diceEl);
-            });
+            const z = (cosmetics[diceBy] || {}).zar;
+            const key = z ? z.slice(4) : '';
+            dice.forEach((val) => container.appendChild(makeDiceEl(val, key, animate)));
         }
 
         // OYUN MEKANİĞİ

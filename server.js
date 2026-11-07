@@ -18,6 +18,11 @@ const CATALOG = [
     { id: 'tas_zumrut',    kat: 'tas',   ad: 'Zümrüt Taşlar',   fiyat: 400 },
     { id: 'tas_yakut',     kat: 'tas',   ad: 'Safir & Yakut',   fiyat: 500 },
     { id: 'tas_neon',      kat: 'tas',   ad: 'Neon Taşlar',     fiyat: 600 },
+    { id: 'zar_kirmizi',   kat: 'zar',   ad: 'Kırmızı Zar',     fiyat: 300 },
+    { id: 'zar_altin',     kat: 'zar',   ad: 'Altın Zar',       fiyat: 400 },
+    { id: 'zar_obsidyen',  kat: 'zar',   ad: 'Siyah Zar',       fiyat: 400 },
+    { id: 'zar_kristal',   kat: 'zar',   ad: 'Kristal Zar',     fiyat: 500 },
+    { id: 'zar_neon',      kat: 'zar',   ad: 'Neon Zar',        fiyat: 600 },
     { id: 'renk_kirmizi',  kat: 'renk',  ad: 'Kırmızı İsim',    fiyat: 150 },
     { id: 'renk_mavi',     kat: 'renk',  ad: 'Mavi İsim',       fiyat: 150 },
     { id: 'renk_yesil',    kat: 'renk',  ad: 'Yeşil İsim',      fiyat: 150 },
@@ -25,7 +30,7 @@ const CATALOG = [
     { id: 'renk_altin',    kat: 'renk',  ad: 'Altın İsim',      fiyat: 300 }
 ];
 const CATALOG_BY_ID = Object.fromEntries(CATALOG.map((i) => [i.id, i]));
-const CATEGORIES = ['tahta', 'tas', 'renk'];
+const CATEGORIES = ['tahta', 'tas', 'zar', 'renk'];
 
 if (!process.env.DATABASE_URL) {
     console.error('HATA: DATABASE_URL tanımlı değil. Neon bağlantı adresini ortam değişkeni olarak ekleyin.');
@@ -89,7 +94,7 @@ async function userFromToken(token) {
 
 async function loadEquipped(userId, db) {
     const r = await (db || pool).query('SELECT item_id FROM inventory WHERE user_id = $1 AND equipped = true', [userId]);
-    const out = { tahta: null, tas: null, renk: null };
+    const out = { tahta: null, tas: null, zar: null, renk: null };
     r.rows.forEach((row) => {
         const it = CATALOG_BY_ID[row.item_id];
         if (it) out[it.kat] = it.id;
@@ -401,7 +406,8 @@ function cleanState(s) {
         movesLeft: s.movesLeft.slice(0, 4),
         logHistory: (Array.isArray(s.logHistory) ? s.logHistory : [])
             .filter((x) => typeof x === 'string').slice(0, 50).map((x) => x.slice(0, 200)),
-        rollId: num(s.rollId) ? s.rollId : 0
+        rollId: num(s.rollId) ? s.rollId : 0,
+        diceBy: s.diceBy === -1 ? -1 : 1
     };
 }
 
@@ -416,8 +422,8 @@ async function broadcastPlayers(room) {
     const koz = {};
     for (const c of [1, -1]) {
         const id = room.players[c];
-        const eq = id ? await loadEquipped(id) : { tas: null, renk: null };
-        koz[c] = { tas: eq.tas, renk: eq.renk };
+        const eq = id ? await loadEquipped(id) : { tas: null, zar: null, renk: null };
+        koz[c] = { tas: eq.tas, zar: eq.zar, renk: eq.renk };
     }
     io.to(key).emit('kozmetik', koz);
     io.to(key).emit('oyuncular', { 1: pick(1, 'username'), '-1': pick(-1, 'username') });
