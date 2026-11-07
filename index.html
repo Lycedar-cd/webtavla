@@ -55,6 +55,13 @@
         [data-board="gece"]    { --s1:#4a5a85; --s2:#38476e; --s3:#2b3858; --td1:#1b2447; --td2:#10163a; --tl1:#9fb4e8; --tl2:#7089c9; }
         [data-board="kiraz"]   { --s1:#c98a6b; --s2:#b06e50; --s3:#965a40; --td1:#7a1f2b; --td2:#4c0f18; --tl1:#f0cfa0; --tl2:#d9a86f; }
         [data-board="obsidyen"]{ --s1:#3a3a40; --s2:#2a2a30; --s3:#1f1f24; --td1:#1c1c22; --td2:#0a0a0d; --tl1:#b8b8c4; --tl2:#8a8a98; }
+        /* Taraftar serisi (sadece takım renkleri) */
+        [data-board="fener"]   { --s1:#16398f; --s2:#0f2c78; --s3:#0a2060; --td1:#00194d; --td2:#000d33; --tl1:#ffe92e; --tl2:#e0c800; }
+        [data-board="gs"]      { --s1:#b3202a; --s2:#8f1620; --s3:#6e0f17; --td1:#5a0b12; --td2:#3a0508; --tl1:#ffc72c; --tl2:#e0a000; }
+        [data-board="bjk"]     { --s1:#4a4a4a; --s2:#383838; --s3:#2a2a2a; --td1:#0d0d0d; --td2:#000000; --tl1:#ffffff; --tl2:#dcdcdc; }
+        [data-board="ts"]      { --s1:#8a1c3c; --s2:#6e1230; --s3:#540b24; --td1:#3d0719; --td2:#27040f; --tl1:#55bdf2; --tl2:#1f8fd4; }
+        /* Mağaza önizlemesinde "Varsayılan" kartı, kuşanılan temayı devralmasın */
+        [data-board="klasik"]  { --s1:#d4a373; --s2:#bc8a5f; --s3:#a47148; --td1:#5c2018; --td2:#3b110b; --tl1:#e9c46a; --tl2:#c69d41; }
 
         .board-surface {
             background: radial-gradient(circle at center, var(--s1) 0%, var(--s2) 70%, var(--s3) 100%);
@@ -675,7 +682,7 @@
             const key = id ? id.split('_')[1] : '';
             if (kat === 'tahta') {
                 const wrap = document.createElement('div');
-                if (key) wrap.setAttribute('data-board', key);
+                wrap.setAttribute('data-board', key || 'klasik');
                 wrap.className = 'w-full rounded-lg overflow-hidden border border-amber-950/60';
                 const surf = document.createElement('div');
                 surf.className = 'board-surface';
@@ -738,6 +745,12 @@
                     (isEq ? 'border-amber-400/70' : 'border-amber-900/30');
                 card.appendChild(shopPreview(shopTab, it.id));
 
+                if (it.seri === 'taraftar') {
+                    const tag = document.createElement('div');
+                    tag.className = 'text-[10px] font-bold tracking-widest text-amber-300/80 -mb-1';
+                    tag.textContent = '⚽ TARAFTAR SERİSİ';
+                    card.appendChild(tag);
+                }
                 const name = document.createElement('div');
                 name.className = 'text-xs font-semibold text-amber-100 text-center';
                 name.textContent = it.ad;
