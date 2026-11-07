@@ -475,7 +475,7 @@
         let shownRollId = 0;
 
         if (socket) {
-            socket.on('rol', (c) => { myColor = c; updateUI(); });
+            socket.on('rol', (c) => { myColor = c; updateUI(); applyCosmetics(cosmetics); });
             socket.on('durum', (st) => applyState(st));
             socket.on('oyuncular', (o) => applyNames(o));
             socket.on('altinlar', (g) => applyGold(g));
@@ -597,8 +597,15 @@
         let cosmetics = { 1: {}, '-1': {} };
 
         function skinFor(color) {
-            const c = cosmetics[color === 'white' ? 1 : -1] || {};
-            return c.tas ? ' skin-' + c.tas.slice(4) : '';
+            const seat = color === 'white' ? 1 : -1;
+            const own = (cosmetics[seat] || {}).tas;
+            if (own) return ' skin-' + own.slice(4);
+            // Rakibin kendi stili yoksa, benim stilimin eş rengiyle göster (sadece benim ekranımda)
+            if (myColor !== null && seat !== myColor) {
+                const mine = (cosmetics[myColor] || {}).tas;
+                if (mine) return ' skin-' + mine.slice(4);
+            }
+            return '';
         }
 
         function applyCosmetics(k) {
