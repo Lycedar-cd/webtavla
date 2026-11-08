@@ -329,7 +329,7 @@
 
     <!-- MAIN -->
     <!-- LOBİ -->
-    <section id="lobby-view" class="max-w-3xl w-full mx-auto flex-grow">
+    <section id="lobby-view" class="max-w-6xl w-full mx-auto flex-grow">
         <div class="text-center mb-5">
             <h2 class="title-font text-2xl text-amber-400">LOBİ</h2>
             <p class="text-xs text-amber-200/60">Bir oda kur ya da açık bir odaya katıl</p>
@@ -338,63 +338,74 @@
             </button>
         </div>
 
-        <div class="bg-black/40 backdrop-blur-md rounded-2xl p-4 border border-amber-900/40 shadow-xl mb-4 text-center">
-            <h3 class="text-sm font-bold text-amber-400 mb-1 flex items-center justify-center gap-2"><i class="fa-solid fa-trophy"></i> DERECELİ MAÇ</h3>
-            <p class="text-xs text-amber-200/60 mb-3">Puanı sana yakın biriyle rastgele eşleş. Kazanan +10, kaybeden -10 puan alır.</p>
-            <div id="queue-idle">
-                <button onclick="startQueue()" class="w-full bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white font-bold px-6 py-3 rounded-xl border border-amber-400/30 transition text-base">
-                    ⚔ DERECELİ MAÇ BUL
-                </button>
-                <p id="my-rank-line" class="text-xs text-amber-200/70 mt-2 min-h-[16px]"></p>
-            </div>
-            <div id="queue-busy" class="hidden">
-                <p class="text-base text-amber-100 font-semibold mb-1">Rakip aranıyor… <span id="queue-time" class="text-amber-300">0:00</span></p>
-                <p id="queue-hint" class="text-[11px] text-amber-200/60 mb-3 min-h-[16px]"></p>
-                <button onclick="cancelQueue()" class="bg-stone-800 hover:bg-stone-700 text-amber-200 font-bold px-8 py-2 rounded-xl border border-amber-900/40 transition text-sm">İPTAL</button>
-            </div>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+        <div class="grid grid-cols-1 lg:grid-cols-[250px_minmax(0,1fr)_250px] gap-4 items-start">
+            <!-- Sol: liderlik tablosu -->
+            <aside class="order-3 lg:order-1">
             <div class="bg-black/40 backdrop-blur-md rounded-2xl p-4 border border-amber-900/40 shadow-xl">
-                <h3 class="text-sm font-bold text-amber-400 mb-3 flex items-center gap-2"><i class="fa-solid fa-plus"></i> ODA KUR</h3>
-                <input id="room-name" type="text" maxlength="24" placeholder="Oda adı (isteğe bağlı)"
-                    onkeydown="if(event.key==='Enter') createRoom()"
-                    class="w-full bg-stone-900/90 border border-amber-900/50 rounded-lg px-3 py-2 text-base text-amber-100 placeholder-gray-500 focus:outline-none focus:border-amber-500/70 mb-2" style="user-select:text">
-                <label class="flex items-center gap-2 text-xs text-amber-200/70 mb-3 cursor-pointer">
-                    <input id="room-private" type="checkbox" class="accent-amber-600">
-                    Gizli oda (listede görünmez, sadece kodla girilir)
-                </label>
-                <button onclick="createRoom()" class="w-full bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white font-bold px-6 py-2 rounded-xl border border-amber-400/30 transition">
-                    ODA KUR
-                </button>
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-bold text-amber-400 flex items-center gap-2"><i class="fa-solid fa-ranking-star"></i> LİDERLİK TABLOSU</h3>
+                    <button onclick="loadLeaderboard()" title="Yenile" class="text-amber-200/60 hover:text-amber-300 text-xs"><i class="fa-solid fa-rotate-right"></i></button>
+                </div>
+                <div id="leaderboard" class="space-y-1"></div>
+            </div>
+            </aside>
+
+            <!-- Orta: dereceli maç, oda kur, kodla katıl -->
+            <div class="order-1 lg:order-2 min-w-0">
+            <div class="bg-black/40 backdrop-blur-md rounded-2xl p-4 border border-amber-900/40 shadow-xl mb-4 text-center">
+                <h3 class="text-sm font-bold text-amber-400 mb-1 flex items-center justify-center gap-2"><i class="fa-solid fa-trophy"></i> DERECELİ MAÇ</h3>
+                <p class="text-xs text-amber-200/60 mb-3">Puanı sana yakın biriyle rastgele eşleş. Kazanan +10, kaybeden -10 puan alır.</p>
+                <div id="queue-idle">
+                    <button onclick="startQueue()" class="w-full bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white font-bold px-6 py-3 rounded-xl border border-amber-400/30 transition text-base">
+                        ⚔ DERECELİ MAÇ BUL
+                    </button>
+                    <p id="my-rank-line" class="text-xs text-amber-200/70 mt-2 min-h-[16px]"></p>
+                </div>
+                <div id="queue-busy" class="hidden">
+                    <p class="text-base text-amber-100 font-semibold mb-1">Rakip aranıyor… <span id="queue-time" class="text-amber-300">0:00</span></p>
+                    <p id="queue-hint" class="text-[11px] text-amber-200/60 mb-3 min-h-[16px]"></p>
+                    <button onclick="cancelQueue()" class="bg-stone-800 hover:bg-stone-700 text-amber-200 font-bold px-8 py-2 rounded-xl border border-amber-900/40 transition text-sm">İPTAL</button>
+                </div>
             </div>
 
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                <div class="bg-black/40 backdrop-blur-md rounded-2xl p-4 border border-amber-900/40 shadow-xl">
+                    <h3 class="text-sm font-bold text-amber-400 mb-3 flex items-center gap-2"><i class="fa-solid fa-plus"></i> ODA KUR</h3>
+                    <input id="room-name" type="text" maxlength="24" placeholder="Oda adı (isteğe bağlı)"
+                        onkeydown="if(event.key==='Enter') createRoom()"
+                        class="w-full bg-stone-900/90 border border-amber-900/50 rounded-lg px-3 py-2 text-base text-amber-100 placeholder-gray-500 focus:outline-none focus:border-amber-500/70 mb-2" style="user-select:text">
+                    <label class="flex items-center gap-2 text-xs text-amber-200/70 mb-3 cursor-pointer">
+                        <input id="room-private" type="checkbox" class="accent-amber-600">
+                        Gizli oda (listede görünmez, sadece kodla girilir)
+                    </label>
+                    <button onclick="createRoom()" class="w-full bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white font-bold px-6 py-2 rounded-xl border border-amber-400/30 transition">
+                        ODA KUR
+                    </button>
+                </div>
+
+                <div class="bg-black/40 backdrop-blur-md rounded-2xl p-4 border border-amber-900/40 shadow-xl">
+                    <h3 class="text-sm font-bold text-amber-400 mb-3 flex items-center gap-2"><i class="fa-solid fa-key"></i> KODLA KATIL</h3>
+                    <input id="room-code-input" type="text" maxlength="4" placeholder="Oda kodu (örn. K7M2)"
+                        oninput="this.value = this.value.toUpperCase()"
+                        onkeydown="if(event.key==='Enter') joinByCode()"
+                        class="w-full bg-stone-900/90 border border-amber-900/50 rounded-lg px-3 py-2 text-base text-amber-100 placeholder-gray-500 tracking-widest focus:outline-none focus:border-amber-500/70 mb-3" style="user-select:text">
+                    <button onclick="joinByCode()" class="w-full bg-stone-800 hover:bg-stone-700 text-amber-200 font-bold px-6 py-2 rounded-xl border border-amber-900/40 transition">
+                        KATIL
+                    </button>
+                    <p class="text-[11px] text-amber-200/50 mt-3">Arkadaşının sana verdiği 4 harfli kodu yaz.</p>
+                </div>
+            </div>
+
+            <p id="lobby-error" class="text-xs text-red-400 min-h-[16px] mb-2 text-center"></p>
+            </div>
+
+            <!-- Sağ: açık odalar -->
+            <aside class="order-2 lg:order-3">
             <div class="bg-black/40 backdrop-blur-md rounded-2xl p-4 border border-amber-900/40 shadow-xl">
-                <h3 class="text-sm font-bold text-amber-400 mb-3 flex items-center gap-2"><i class="fa-solid fa-key"></i> KODLA KATIL</h3>
-                <input id="room-code-input" type="text" maxlength="4" placeholder="Oda kodu (örn. K7M2)"
-                    oninput="this.value = this.value.toUpperCase()"
-                    onkeydown="if(event.key==='Enter') joinByCode()"
-                    class="w-full bg-stone-900/90 border border-amber-900/50 rounded-lg px-3 py-2 text-base text-amber-100 placeholder-gray-500 tracking-widest focus:outline-none focus:border-amber-500/70 mb-3" style="user-select:text">
-                <button onclick="joinByCode()" class="w-full bg-stone-800 hover:bg-stone-700 text-amber-200 font-bold px-6 py-2 rounded-xl border border-amber-900/40 transition">
-                    KATIL
-                </button>
-                <p class="text-[11px] text-amber-200/50 mt-3">Arkadaşının sana verdiği 4 harfli kodu yaz.</p>
+                <h3 class="text-sm font-bold text-amber-400 mb-3 flex items-center gap-2"><i class="fa-solid fa-door-open"></i> AÇIK ODALAR</h3>
+                <div id="room-list" class="space-y-2"></div>
             </div>
-        </div>
-
-        <p id="lobby-error" class="text-xs text-red-400 min-h-[16px] mb-2 text-center"></p>
-
-        <div class="bg-black/40 backdrop-blur-md rounded-2xl p-4 border border-amber-900/40 shadow-xl">
-            <h3 class="text-sm font-bold text-amber-400 mb-3 flex items-center gap-2"><i class="fa-solid fa-door-open"></i> AÇIK ODALAR</h3>
-            <div id="room-list" class="space-y-2"></div>
-        </div>
-
-        <div class="bg-black/40 backdrop-blur-md rounded-2xl p-4 border border-amber-900/40 shadow-xl mt-4">
-            <div class="flex items-center justify-between mb-3">
-                <h3 class="text-sm font-bold text-amber-400 flex items-center gap-2"><i class="fa-solid fa-ranking-star"></i> LİDERLİK TABLOSU</h3>
-                <button onclick="loadLeaderboard()" title="Yenile" class="text-amber-200/60 hover:text-amber-300 text-xs"><i class="fa-solid fa-rotate-right"></i></button>
-            </div>
-            <div id="leaderboard" class="space-y-1"></div>
+            </aside>
         </div>
     </section>
 
@@ -898,28 +909,41 @@
             }
             list.forEach((r) => {
                 const row = document.createElement('div');
-                row.className = 'flex items-center justify-between gap-3 bg-stone-900/70 border border-amber-900/30 rounded-xl px-3 py-2';
+                row.className = 'flex flex-col gap-2 bg-stone-900/70 border border-amber-900/30 rounded-xl px-3 py-2';
 
                 const info = document.createElement('div');
                 info.className = 'min-w-0';
                 const title = document.createElement('div');
-                title.className = 'text-sm font-semibold text-amber-100 truncate';
-                title.textContent = r.ad;
+                title.className = 'flex items-baseline gap-2 text-sm font-semibold text-amber-100';
+                const nameEl = document.createElement('span');
+                nameEl.className = 'truncate min-w-0';
+                nameEl.textContent = r.ad;
+                nameEl.title = r.ad;
                 const code = document.createElement('span');
-                code.className = 'ml-2 text-[11px] text-amber-200/50 tracking-widest';
+                code.className = 'shrink-0 text-[11px] text-amber-200/50 tracking-widest';
                 code.textContent = r.kod;
+                title.appendChild(nameEl);
                 title.appendChild(code);
 
                 const players = document.createElement('div');
-                players.className = 'text-xs text-gray-400 truncate';
-                const p1 = r.oyuncular[0] || 'boş';
-                const p2 = r.oyuncular[1] || 'boş';
-                players.textContent = '⚪ ' + p1 + '   vs   ⚫ ' + p2 + (r.izleyici > 0 ? '   · 👁 ' + r.izleyici : '');
+                players.className = 'text-xs text-gray-400 space-y-0.5 mt-1';
+                [['⚪ ', r.oyuncular[0]], ['⚫ ', r.oyuncular[1]]].forEach(([mark, nm]) => {
+                    const line = document.createElement('div');
+                    line.className = 'truncate' + (nm ? '' : ' italic text-gray-600');
+                    line.textContent = mark + (nm || 'boş koltuk');
+                    players.appendChild(line);
+                });
+                if (r.izleyici > 0) {
+                    const sp = document.createElement('div');
+                    sp.className = 'text-[11px] text-gray-500';
+                    sp.textContent = '👁 ' + r.izleyici + ' izleyici';
+                    players.appendChild(sp);
+                }
                 info.appendChild(title);
                 info.appendChild(players);
 
                 const btn = document.createElement('button');
-                btn.className = 'shrink-0 px-4 py-1.5 rounded-lg text-xs font-bold border transition ' +
+                btn.className = 'w-full px-4 py-1.5 rounded-lg text-xs font-bold border transition ' +
                     (r.dolu
                         ? 'bg-stone-800 hover:bg-stone-700 text-amber-200 border-amber-900/40'
                         : 'bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white border-amber-400/30');
@@ -1197,30 +1221,29 @@
             list.forEach((x, i) => {
                 const me = myAccount && x.username === myAccount.username;
                 const row = document.createElement('div');
-                row.className = 'flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs ' +
+                row.className = 'flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs ' +
                     (me ? 'bg-amber-700/30 border border-amber-500/40' : 'bg-stone-900/60 border border-amber-900/20');
 
                 const pos = document.createElement('span');
-                pos.className = 'w-6 text-center font-bold text-amber-300';
+                pos.className = 'w-6 shrink-0 text-center font-bold text-amber-300';
                 pos.textContent = medals[i] || (i + 1);
 
-                const name = document.createElement('span');
-                name.className = 'flex-1 min-w-0 truncate font-semibold text-amber-100';
+                const mid = document.createElement('div');
+                mid.className = 'flex-1 min-w-0';
+                const name = document.createElement('div');
+                name.className = 'truncate font-semibold text-amber-100 text-sm';
                 name.textContent = x.username;
-                const rank = document.createElement('span');
-                rank.className = 'ml-2 text-[10px] text-amber-200/60';
-                rank.textContent = rankName(x.rating);
-                name.appendChild(rank);
+                const sub = document.createElement('div');
+                sub.className = 'text-[10px] text-gray-400';
+                sub.textContent = rankName(x.rating) + ' · G ' + x.wins + ' · M ' + x.losses;
+                mid.appendChild(name);
+                mid.appendChild(sub);
 
                 const pts = document.createElement('span');
-                pts.className = 'font-bold text-amber-300';
+                pts.className = 'shrink-0 font-bold text-amber-300 text-sm';
                 pts.textContent = x.rating;
 
-                const gm = document.createElement('span');
-                gm.className = 'w-20 text-right text-gray-400';
-                gm.textContent = 'G ' + x.wins + ' · M ' + x.losses;
-
-                row.appendChild(pos); row.appendChild(name); row.appendChild(pts); row.appendChild(gm);
+                row.appendChild(pos); row.appendChild(mid); row.appendChild(pts);
                 box.appendChild(row);
             });
         }
