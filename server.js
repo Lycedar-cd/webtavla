@@ -8,6 +8,18 @@ const { Server } = require('socket.io');
 
 const WIN_GOLD = 100; // her galibiyette kazanılan altın
 
+// Elo / dereceli maç ayarları (env değişkenleri sadece test içindir, canlıda varsayılanlar geçerli)
+const RANK_START = 1000;
+const RANK_DELTA = 10;                                                    // kazanan +10, kaybeden -10
+const RANKED_MIN_MS = Number(process.env.RANKED_MIN_MS ?? 3 * 60 * 1000);   // bundan kısa maç sayılmaz
+const RANKED_MIN_MOVES = Number(process.env.RANKED_MIN_MOVES ?? 20);        // bundan az hamleli maç sayılmaz
+const PAIR_LIMIT = Number(process.env.RANKED_PAIR_LIMIT ?? 3);              // aynı iki hesap, günde en fazla
+const SEAT_GRACE_MS = Number(process.env.SEAT_GRACE_MS ?? 2 * 60 * 1000);   // bağlantı kopunca koltuk bekleme süresi
+const RANKED_JOIN_MS = Number(process.env.RANKED_JOIN_MS ?? 60 * 1000);     // eşleşince rakibin bağlanma süresi
+const MATCH_TICK_MS = Number(process.env.MATCH_TICK_MS ?? 2000);            // kuyruk tarama aralığı
+const RANGE_STEP_MS = Number(process.env.RANGE_STEP_MS ?? 10 * 1000);       // aralık genişleme adımı
+const RANGE_START = 100, RANGE_STEP = 50, RANGE_MAX = 400;
+
 // Mağaza kataloğu. Fiyatlar sadece burada belirlenir, istemci fiyat gönderemez.
 const CATALOG = [
     { id: 'tahta_zumrut',  kat: 'tahta', ad: 'Zümrüt Orman',    fiyat: 300 },
@@ -92,8 +104,22 @@ async function userFromToken(token) {
     if (ageMs > 90 * 24 * 60 * 60 * 1000) return null; // 90 gün sonra tekrar giriş
     return {
         id: row.id, username: row.username, gold: row.gold, wins: row.wins,
-        kusanilan: await loadEquipped(row.id)
+        kusanilan: await loadEquipped(row.id),
+        puan: await ensureRating(row.id)
     };
+}
+
+async function ensureRating(userId) {
+    let r = await pool.query('SELECT rating, wins, losses FROM ratings WHERE user_id = $1', [userId]);
+    if (!r.rows.length) {
+        try {
+            await pool.query('INSERT INTO ratings (user_id, rating, wins, losses) VALUES ($1, $2, 0, 0)', [userId, RANK_START]);
+        } catch (e) {
+            if (e.code !== '23505') throw e;
+        }
+        r = await pool.query('SELECT rating, wins, losses FROM ratings WHERE user_id = $1', [userId]);
+    }
+    return r.rows[0];
 }
 
 async function loadEquipped(userId, db) {
@@ -274,6 +300,23 @@ app.post('/api/kusan', async (req, res) => {
     }
 });
 
+app.get('/api/liderlik', async (req, res) => {
+    try {
+        const user = await authReq(req);
+        if (!user) return res.status(401).json({ hata: 'Giriş yapmalısın.' });
+        const r = await pool.query(
+            `SELECT u.username, r.rating, r.wins, r.losses
+             FROM ratings r JOIN users u ON u.id = r.user_id
+             WHERE r.wins + r.losses > 0
+             ORDER BY r.rating DESC, r.wins DESC, u.username ASC
+             LIMIT 10`);
+        res.json({ liste: r.rows });
+    } catch (e) {
+        console.error('Liderlik hatası:', e);
+        res.status(500).json({ hata: 'Sunucu hatası.' });
+    }
+});
+
 app.post('/api/cikis', async (req, res) => {
     try {
         const token = req.body && req.body.token;
@@ -430,6 +473,11 @@ async function broadcastPlayers(room) {
         koz[c] = { tas: eq.tas, zar: eq.zar, renk: eq.renk };
     }
     io.to(key).emit('kozmetik', koz);
+    const pu = {};
+    for (const c of [1, -1]) {
+        pu[c] = room.players[c] ? (await ensureRating(room.players[c])).rating : null;
+    }
+    io.to(key).emit('puanlar', pu);
     io.to(key).emit('oyuncular', { 1: pick(1, 'username'), '-1': pick(-1, 'username') });
     io.to(key).emit('altinlar', { 1: pick(1, 'gold'), '-1': pick(-1, 'gold') });
     broadcastLobby();
@@ -439,11 +487,13 @@ async function sendAccountToUser(userId) {
     const r = await pool.query('SELECT username, gold, wins FROM users WHERE id = $1', [userId]);
     if (!r.rows[0]) return;
     const kusanilan = await loadEquipped(userId);
+    const puan = await ensureRating(userId);
     const sockets = await io.fetchSockets();
     sockets.forEach((s) => {
         if (s.data.user && s.data.user.id === userId) {
             s.data.user.kusanilan = kusanilan;
-            s.emit('hesap', { ...r.rows[0], kusanilan });
+            s.data.user.puan = puan;
+            s.emit('hesap', { ...r.rows[0], kusanilan, puan });
         }
     });
 }
@@ -465,11 +515,159 @@ async function awardWin(room, winnerColor, userId) {
 
 function freeSeat(room, userId) {
     if (room.seatTimers[userId]) { clearTimeout(room.seatTimers[userId]); delete room.seatTimers[userId]; }
+    const was = colorOf(room, userId);
+    const otherId = was === 1 ? room.players['-1'] : was === -1 ? room.players[1] : null;
     if (room.players[1] === userId) room.players[1] = null;
     if (room.players['-1'] === userId) room.players['-1'] = null;
+
+    if (room.ranked && was !== null) {
+        if (room.rankedState === 'bekliyor') {
+            cancelRanked(room, 'rakip-ayrildi').catch((e) => console.error(e));
+        } else if (room.rankedState === 'oynaniyor' && otherId) {
+            finishRanked(room, otherId, userId, 'terk').catch((e) => console.error(e));
+        }
+    }
     if (!room.players[1] && !room.players['-1']) { room.state = null; room.awarded = false; }
     broadcastPlayers(room).catch((e) => console.error(e));
 }
+
+/* --------------------------- Dereceli maç (Elo) --------------------------- */
+
+const queue = new Map(); // hesap -> { userId, socketId, rating, since }
+
+function rangeOf(e) {
+    return Math.min(RANGE_MAX, RANGE_START + RANGE_STEP * Math.floor((Date.now() - e.since) / RANGE_STEP_MS));
+}
+
+function dequeueSocket(socketId) {
+    for (const [uid, e] of queue) {
+        if (e.socketId === socketId) queue.delete(uid);
+    }
+}
+
+async function pairAtLimit(a, b) {
+    const key = Math.min(a, b) + '-' + Math.max(a, b);
+    const r = await pool.query('SELECT created_at FROM ranked_games WHERE pair_key = $1 AND counted = true', [key]);
+    const since = Date.now() - 24 * 60 * 60 * 1000;
+    return r.rows.filter((x) => new Date(x.created_at).getTime() > since).length >= PAIR_LIMIT;
+}
+
+function createRankedRoom(a, b) {
+    const code = newRoomCode();
+    if (!code) return null;
+    const aWhite = Math.random() < 0.5; // renkler rastgele
+    const room = {
+        code, ad: 'Dereceli maç', gizli: true, ranked: true, rankedState: 'bekliyor',
+        allowed: new Set([a.userId, b.userId]),
+        createdBy: a.userId, createdAt: Date.now(),
+        players: { 1: aWhite ? a.userId : b.userId, '-1': aWhite ? b.userId : a.userId },
+        state: null, chat: [], awarded: false, online: {}, seatTimers: {}, deleteTimer: null,
+        moves: 0, gameStart: null, joinTimer: null
+    };
+    rooms.set(code, room);
+    room.joinTimer = setTimeout(() => cancelRanked(room, 'baglanamadi').catch((e) => console.error(e)), RANKED_JOIN_MS);
+    return room;
+}
+
+// Maç başlamadan bozulduysa: puan değişmez, içerideki oyuncu lobiye döner
+async function cancelRanked(room, neden) {
+    if (room.rankedState !== 'bekliyor') return;
+    room.rankedState = 'iptal';
+    if (room.joinTimer) { clearTimeout(room.joinTimer); room.joinTimer = null; }
+    const set = io.sockets.adapter.rooms.get(roomKey(room.code));
+    for (const id of set ? [...set] : []) {
+        const s = io.sockets.sockets.get(id);
+        if (!s) continue;
+        s.leave(roomKey(room.code));
+        s.data.room = null;
+        s.join('lobi');
+        s.emit('mac-iptal', { neden });
+        s.emit('odalar', roomList());
+    }
+    Object.values(room.seatTimers).forEach(clearTimeout);
+    if (room.deleteTimer) clearTimeout(room.deleteTimer);
+    rooms.delete(room.code);
+    broadcastLobby();
+}
+
+// Dereceli maç bitti (normal bitiş ya da terk): puanı işle ve oyunculara bildir
+async function finishRanked(room, winnerId, loserId, neden) {
+    if (room.rankedState !== 'oynaniyor') return;
+    room.rankedState = 'bitti';
+
+    let sayildi = true, sebep = null;
+    if (neden === 'bitti' && (Date.now() - room.gameStart < RANKED_MIN_MS || room.moves < RANKED_MIN_MOVES)) {
+        sayildi = false; sebep = 'kisa';
+    }
+    const pairKey = Math.min(winnerId, loserId) + '-' + Math.max(winnerId, loserId);
+    if (sayildi && await pairAtLimit(winnerId, loserId)) { sayildi = false; sebep = 'limit'; }
+
+    const lBefore = await ensureRating(loserId);
+    await ensureRating(winnerId);
+    let wd = 0, ld = 0;
+    if (sayildi) {
+        wd = RANK_DELTA;
+        ld = Math.min(RANK_DELTA, lBefore.rating); // puan 0'ın altına inmez
+        await pool.query('UPDATE ratings SET rating = rating + $1, wins = wins + 1 WHERE user_id = $2', [wd, winnerId]);
+        await pool.query('UPDATE ratings SET rating = rating + $1, losses = losses + 1 WHERE user_id = $2', [-ld, loserId]);
+    }
+    await pool.query(
+        'INSERT INTO ranked_games (winner_id, loser_id, pair_key, counted, reason, delta) VALUES ($1, $2, $3, $4, $5, $6)',
+        [winnerId, loserId, pairKey, sayildi, neden, wd]);
+
+    const wNow = await ensureRating(winnerId);
+    const lNow = await ensureRating(loserId);
+    const set = io.sockets.adapter.rooms.get(roomKey(room.code));
+    for (const id of set ? [...set] : []) {
+        const s = io.sockets.sockets.get(id);
+        if (!s || !s.data.user) continue;
+        const uid = s.data.user.id;
+        if (uid === winnerId) s.emit('mac-sonucu', { sonuc: 'kazandi', neden, sayildi, sebep, delta: wd, puan: wNow.rating });
+        else if (uid === loserId) s.emit('mac-sonucu', { sonuc: 'kaybetti', neden, sayildi, sebep, delta: -ld, puan: lNow.rating });
+    }
+    await sendAccountToUser(winnerId);
+    await sendAccountToUser(loserId);
+    await broadcastPlayers(room);
+}
+
+let matching = false;
+async function tryMatch() {
+    if (matching || queue.size < 2) return;
+    matching = true;
+    try {
+        const entries = [...queue.values()].sort((x, y) => x.since - y.since);
+        const used = new Set();
+        for (const a of entries) {
+            if (used.has(a.userId) || !queue.has(a.userId)) continue;
+            const cands = [];
+            for (const b of entries) {
+                if (b === a || used.has(b.userId) || !queue.has(b.userId)) continue;
+                if (Math.abs(a.rating - b.rating) > Math.max(rangeOf(a), rangeOf(b))) continue;
+                if (await pairAtLimit(a.userId, b.userId)) continue;
+                cands.push(b);
+            }
+            if (!cands.length) continue;
+            const b = cands[Math.floor(Math.random() * cands.length)]; // aralıktakilerden rastgele
+            used.add(a.userId); used.add(b.userId);
+            queue.delete(a.userId); queue.delete(b.userId);
+            const sa = io.sockets.sockets.get(a.socketId);
+            const sb = io.sockets.sockets.get(b.socketId);
+            const room = sa && sb ? createRankedRoom(a, b) : null;
+            if (!room) { // biri kopmuş ya da oda açılamadı: sağlam olanı kuyruğa geri koy
+                if (sa) queue.set(a.userId, a);
+                if (sb) queue.set(b.userId, b);
+                continue;
+            }
+            sa.emit('eslesti', { kod: room.code });
+            sb.emit('eslesti', { kod: room.code });
+        }
+    } catch (e) {
+        console.error('Eşleştirme hatası:', e);
+    } finally {
+        matching = false;
+    }
+}
+setInterval(tryMatch, MATCH_TICK_MS);
 
 // Bir bağlantıyı bulunduğu odadan çıkarır. aniKoltuk: koltuğu hemen boşalt (odadan ayrıl düğmesi)
 function leaveCurrentRoom(socket, aniKoltuk) {
@@ -487,8 +685,8 @@ function leaveCurrentRoom(socket, aniKoltuk) {
         if (aniKoltuk) {
             freeSeat(room, uid);
         } else {
-            // Bağlantı koptuysa 2 dakika içinde dönmezse koltuğu boşalt
-            room.seatTimers[uid] = setTimeout(() => freeSeat(room, uid), 2 * 60 * 1000);
+            // Bağlantı koptuysa belirli süre içinde dönmezse koltuğu boşalt (dereceli maçta terk sayılır)
+            room.seatTimers[uid] = setTimeout(() => freeSeat(room, uid), SEAT_GRACE_MS);
         }
     }
     scheduleCleanup(room, socket.id);
@@ -514,7 +712,7 @@ io.on('connection', (socket) => {
     socket.data.room = null;
 
     socket.join('lobi');
-    socket.emit('hesap', { username: user.username, gold: user.gold, wins: user.wins, kusanilan: user.kusanilan });
+    socket.emit('hesap', { username: user.username, gold: user.gold, wins: user.wins, kusanilan: user.kusanilan, puan: user.puan });
     socket.emit('odalar', roomList());
 
     let lastCreate = 0;
@@ -522,11 +720,12 @@ io.on('connection', (socket) => {
     socket.on('oda-kur', (data, ack) => {
         if (typeof ack !== 'function') return;
         try {
+            dequeueSocket(socket.id);
             const now = Date.now();
             if (now - lastCreate < 2000) return ack({ hata: 'Biraz yavaş ol, birkaç saniye sonra tekrar dene.' });
             lastCreate = now;
             if (rooms.size >= MAX_ROOMS) return ack({ hata: 'Şu an çok fazla oda açık. Daha sonra tekrar dene.' });
-            const mine = [...rooms.values()].filter((r) => r.createdBy === user.id).length;
+            const mine = [...rooms.values()].filter((r) => r.createdBy === user.id && !r.ranked).length;
             if (mine >= MAX_ROOMS_PER_USER) return ack({ hata: 'Çok fazla açık odan var. Birini kapatmak için odadan ayrıl.' });
 
             const room = createRoom(user, data && data.ad, data && data.gizli);
@@ -545,9 +744,11 @@ io.on('connection', (socket) => {
             const kod = data && typeof data.kod === 'string' ? data.kod.trim().toUpperCase() : '';
             const room = rooms.get(kod);
             if (!room) return ack({ hata: 'Böyle bir oda bulunamadı.' });
+            if (room.ranked && !room.allowed.has(user.id)) return ack({ hata: 'Bu bir dereceli maç odası.' });
 
+            dequeueSocket(socket.id);
             if (socket.data.room && socket.data.room !== kod) leaveCurrentRoom(socket, true);
-            if (socket.data.room === kod) return ack({ ok: true, kod: room.code, ad: room.ad });
+            if (socket.data.room === kod) return ack({ ok: true, kod: room.code, ad: room.ad, dereceli: !!room.ranked });
 
             if (room.seatTimers[user.id]) { clearTimeout(room.seatTimers[user.id]); delete room.seatTimers[user.id]; }
             if (room.deleteTimer) { clearTimeout(room.deleteTimer); room.deleteTimer = null; }
@@ -558,8 +759,18 @@ io.on('connection', (socket) => {
             room.online[user.id] = (room.online[user.id] || 0) + 1;
             const color = seat(room, user.id);
 
+            // Dereceli maç: iki oyuncu da odaya girince maç başlar
+            if (room.ranked && room.rankedState === 'bekliyor') {
+                const [x, y] = [...room.allowed];
+                if (room.online[x] > 0 && room.online[y] > 0) {
+                    room.rankedState = 'oynaniyor';
+                    room.gameStart = Date.now();
+                    if (room.joinTimer) { clearTimeout(room.joinTimer); room.joinTimer = null; }
+                }
+            }
+
             // Önce cevabı gönder, sonra oda verilerini (istemci sırayla işler)
-            ack({ ok: true, kod: room.code, ad: room.ad });
+            ack({ ok: true, kod: room.code, ad: room.ad, dereceli: !!room.ranked });
             socket.emit('rol', color);
             if (room.state) socket.emit('durum', room.state);
             socket.emit('sohbet-gecmis', room.chat);
@@ -568,6 +779,32 @@ io.on('connection', (socket) => {
             console.error('Odaya katılma hatası:', e);
             ack({ hata: 'Sunucu hatası.' });
         }
+    });
+
+    socket.on('esles-ara', async (a, b) => {
+        const ack = typeof a === 'function' ? a : b;
+        if (typeof ack !== 'function') return;
+        try {
+            if (socket.data.room) return ack({ hata: 'Önce bulunduğun odadan ayrıl.' });
+            const puan = await ensureRating(user.id);
+            const old = queue.get(user.id);
+            if (old && old.socketId !== socket.id) {
+                const os = io.sockets.sockets.get(old.socketId);
+                if (os) os.emit('kuyruk-iptal');
+            }
+            queue.set(user.id, { userId: user.id, socketId: socket.id, rating: puan.rating, since: Date.now() });
+            ack({ ok: true });
+            tryMatch();
+        } catch (e) {
+            console.error('Kuyruk hatası:', e);
+            ack({ hata: 'Sunucu hatası.' });
+        }
+    });
+
+    socket.on('esles-iptal', (a, b) => {
+        const ack = typeof a === 'function' ? a : b;
+        dequeueSocket(socket.id);
+        if (typeof ack === 'function') ack({ ok: true });
     });
 
     socket.on('oda-ayril', (a, b) => {
@@ -587,7 +824,14 @@ io.on('connection', (socket) => {
             const s = cleanState(raw);
             if (!s) return;
 
+            if (room.ranked) {
+                if (room.rankedState !== 'oynaniyor') return;                 // başlamamış ya da bitmiş maçta durum değişmez
+                if (room.state && s.rollId < room.state.rollId) return;       // yeniden başlatma (sıfırlama) yok
+            }
             const prev = room.state;
+            if (room.ranked && prev && s.rollId === prev.rollId && s.movesLeft.length < prev.movesLeft.length) {
+                room.moves += prev.movesLeft.length - s.movesLeft.length;     // tüketilen her zar bir hamle
+            }
             room.state = s;
             socket.to(roomKey(room.code)).emit('durum', s);
 
@@ -598,6 +842,10 @@ io.on('connection', (socket) => {
             if (!prev || !prev.off || prev.off[key] < 11) return; // tek hamlede 15'e sıçrayamaz
             room.awarded = true;
             await awardWin(room, winner, user.id);
+            if (room.ranked) {
+                const loserId = room.players[winner === 1 ? '-1' : 1];
+                if (loserId) await finishRanked(room, user.id, loserId, 'bitti');
+            }
         } catch (e) {
             console.error('Durum hatası:', e);
         }
@@ -622,6 +870,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
+        dequeueSocket(socket.id);
         leaveCurrentRoom(socket, false);
     });
 });
@@ -648,6 +897,22 @@ async function init() {
         item_id TEXT NOT NULL,
         equipped BOOLEAN NOT NULL DEFAULT false,
         PRIMARY KEY (user_id, item_id)
+    )`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS ratings (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        rating INTEGER NOT NULL DEFAULT 1000,
+        wins INTEGER NOT NULL DEFAULT 0,
+        losses INTEGER NOT NULL DEFAULT 0
+    )`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS ranked_games (
+        id SERIAL PRIMARY KEY,
+        winner_id INTEGER NOT NULL,
+        loser_id INTEGER NOT NULL,
+        pair_key TEXT NOT NULL,
+        counted BOOLEAN NOT NULL,
+        reason TEXT NOT NULL,
+        delta INTEGER NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`);
     const PORT = process.env.PORT || 3000;
     server.listen(PORT, () => console.log('Sunucu çalışıyor: http://localhost:' + PORT));

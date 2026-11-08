@@ -256,8 +256,9 @@
             <div class="text-5xl mb-3">🏆</div>
             <h2 class="title-font text-2xl text-amber-400 mb-2">TEBRİKLER!</h2>
             <p id="win-text" class="text-lg text-amber-100 font-semibold mb-2 break-words"></p>
+            <p id="win-elo" class="text-amber-200 text-sm font-semibold mb-1 min-h-[1.25rem] break-words"></p>
             <p id="win-gold" class="text-yellow-300 font-semibold mb-5 min-h-[1.5rem]"></p>
-            <button onclick="initGame(true)" class="w-full bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white font-bold px-6 py-2.5 rounded-xl border border-amber-400/30 transition">
+            <button id="win-btn" onclick="initGame(true)" class="w-full bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white font-bold px-6 py-2.5 rounded-xl border border-amber-400/30 transition">
                 YENİ OYUN
             </button>
         </div>
@@ -277,7 +278,7 @@
             <div id="player1-card" class="flex items-center gap-3 transition-all duration-300">
                 <div id="p1-dot" class="w-6 h-6 rounded-full checker-white border border-gray-400 shadow"></div>
                 <div>
-                    <div id="p1-name" class="text-xs font-semibold text-gray-300">OYUNCU 1</div>
+                    <div class="flex items-baseline gap-1.5"><div id="p1-name" class="text-xs font-semibold text-gray-300">OYUNCU 1</div><span id="p1-puan" class="text-[10px] font-bold text-amber-300/80"></span></div>
                     <div class="text-sm font-bold text-amber-400" id="p1-score">Toplanan: 0/15</div>
                     <div id="p1-gold" class="text-[11px] text-yellow-300 min-h-[14px]"></div>
                 </div>
@@ -286,7 +287,7 @@
             <div id="player2-card" class="flex items-center gap-3 opacity-50 transition-all duration-300">
                 <div id="p2-dot" class="w-6 h-6 rounded-full checker-black border border-gray-600 shadow"></div>
                 <div>
-                    <div id="p2-name" class="text-xs font-semibold text-gray-300">OYUNCU 2</div>
+                    <div class="flex items-baseline gap-1.5"><div id="p2-name" class="text-xs font-semibold text-gray-300">OYUNCU 2</div><span id="p2-puan" class="text-[10px] font-bold text-amber-300/80"></span></div>
                     <div class="text-sm font-bold text-amber-400" id="p2-score">Toplanan: 0/15</div>
                     <div id="p2-gold" class="text-[11px] text-yellow-300 min-h-[14px]"></div>
                 </div>
@@ -302,6 +303,7 @@
             <div id="account-chip" style="display:none" class="items-center gap-2 bg-black/50 px-3 py-1.5 rounded-xl border border-amber-800/30 text-xs">
                 <span id="acc-name" class="font-semibold text-amber-200 max-w-[110px] truncate"></span>
                 <span id="acc-gold" class="text-yellow-300 font-bold"></span>
+                <span id="acc-puan" class="text-amber-300 font-bold"></span>
                 <button onclick="openShop()" title="Mağaza" class="text-amber-200/80 hover:text-amber-300"><i class="fa-solid fa-store"></i></button>
                 <button onclick="logout()" title="Çıkış yap" class="text-amber-200/60 hover:text-amber-300"><i class="fa-solid fa-right-from-bracket"></i></button>
             </div>
@@ -313,7 +315,7 @@
                     <i class="fa-solid fa-dice text-lg"></i>
                     <span>ZAR AT</span>
                 </button>
-                <button onclick="initGame(true)" class="bg-stone-800 hover:bg-stone-700 text-amber-200 p-2.5 rounded-xl border border-amber-900/40 transition" title="Yeniden Başlat">
+                <button id="btn-reset" onclick="initGame(true)" class="bg-stone-800 hover:bg-stone-700 text-amber-200 p-2.5 rounded-xl border border-amber-900/40 transition" title="Yeniden Başlat">
                     <i class="fa-solid fa-rotate-right"></i>
                 </button>
         
@@ -333,6 +335,22 @@
             <button onclick="openShop()" class="mt-3 bg-stone-800 hover:bg-stone-700 text-amber-200 text-xs font-bold px-4 py-1.5 rounded-lg border border-amber-900/40 transition">
                 <i class="fa-solid fa-store"></i> MAĞAZA
             </button>
+        </div>
+
+        <div class="bg-black/40 backdrop-blur-md rounded-2xl p-4 border border-amber-900/40 shadow-xl mb-4 text-center">
+            <h3 class="text-sm font-bold text-amber-400 mb-1 flex items-center justify-center gap-2"><i class="fa-solid fa-trophy"></i> DERECELİ MAÇ</h3>
+            <p class="text-xs text-amber-200/60 mb-3">Puanı sana yakın biriyle rastgele eşleş. Kazanan +10, kaybeden -10 puan alır.</p>
+            <div id="queue-idle">
+                <button onclick="startQueue()" class="w-full bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white font-bold px-6 py-3 rounded-xl border border-amber-400/30 transition text-base">
+                    ⚔ DERECELİ MAÇ BUL
+                </button>
+                <p id="my-rank-line" class="text-xs text-amber-200/70 mt-2 min-h-[16px]"></p>
+            </div>
+            <div id="queue-busy" class="hidden">
+                <p class="text-base text-amber-100 font-semibold mb-1">Rakip aranıyor… <span id="queue-time" class="text-amber-300">0:00</span></p>
+                <p id="queue-hint" class="text-[11px] text-amber-200/60 mb-3 min-h-[16px]"></p>
+                <button onclick="cancelQueue()" class="bg-stone-800 hover:bg-stone-700 text-amber-200 font-bold px-8 py-2 rounded-xl border border-amber-900/40 transition text-sm">İPTAL</button>
+            </div>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
@@ -368,6 +386,14 @@
         <div class="bg-black/40 backdrop-blur-md rounded-2xl p-4 border border-amber-900/40 shadow-xl">
             <h3 class="text-sm font-bold text-amber-400 mb-3 flex items-center gap-2"><i class="fa-solid fa-door-open"></i> AÇIK ODALAR</h3>
             <div id="room-list" class="space-y-2"></div>
+        </div>
+
+        <div class="bg-black/40 backdrop-blur-md rounded-2xl p-4 border border-amber-900/40 shadow-xl mt-4">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-sm font-bold text-amber-400 flex items-center gap-2"><i class="fa-solid fa-ranking-star"></i> LİDERLİK TABLOSU</h3>
+                <button onclick="loadLeaderboard()" title="Yenile" class="text-amber-200/60 hover:text-amber-300 text-xs"><i class="fa-solid fa-rotate-right"></i></button>
+            </div>
+            <div id="leaderboard" class="space-y-1"></div>
         </div>
     </section>
 
@@ -488,12 +514,25 @@
             socket.on('altinlar', (g) => applyGold(g));
             socket.on('odalar', (list) => renderRooms(list));
             socket.on('connect', () => {
+                setQueueUI(false);
                 let kod = null;
                 try { kod = sessionStorage.getItem('roomKod'); } catch (e) {}
                 if (kod) joinRoom(kod, true); else showLobby();
             });
             socket.on('hesap', (a) => { myAccount = a; renderAccount(); applyMyBoard(a); });
             socket.on('kozmetik', (k) => applyCosmetics(k));
+            socket.on('puanlar', (p) => applyPuanlar(p));
+            socket.on('eslesti', (k) => { setQueueUI(false); joinRoom(k.kod, 'eslesme'); });
+            socket.on('kuyruk-iptal', () => setQueueUI(false));
+            socket.on('mac-iptal', (m) => {
+                try { sessionStorage.removeItem('roomKod'); } catch (e) {}
+                resetGameView();
+                showLobby();
+                setLobbyError(m && m.neden === 'rakip-ayrildi'
+                    ? 'Rakip maçtan ayrıldı, eşleşme iptal edildi. Puan değişmedi.'
+                    : 'Rakip bağlanamadı, eşleşme iptal edildi. Puan değişmedi.');
+            });
+            socket.on('mac-sonucu', (m) => onMatchResult(m));
             socket.on('kazanc', (k) => {
                 const el = document.getElementById('win-gold');
                 el.textContent = (k.renk === myColor)
@@ -508,6 +547,7 @@
                 }
             });
             socket.on('disconnect', (reason) => {
+                setQueueUI(false);
                 // /sifirla gibi sunucu kaynaklı kopmalarda otomatik yeniden bağlan
                 if (reason === 'io server disconnect' && authToken) socket.connect();
             });
@@ -815,8 +855,10 @@
             show('header-players', false);
             show('shop-big', false);
             show('game-buttons', false);
+            show('btn-reset', true);
             hideWin();
             updateUI();
+            loadLeaderboard();
         }
 
         function showGame() {
@@ -837,6 +879,7 @@
             applyNames({ 1: null, '-1': null });
             applyGold({ 1: null, '-1': null });
             applyCosmetics({ 1: {}, '-1': {} });
+            applyPuanlar({ 1: null, '-1': null });
             document.getElementById('chat-box').innerHTML = '';
             document.getElementById('emoji-panel').classList.add('hidden');
             initGame(false);
@@ -912,14 +955,18 @@
                 if (!res || !res.ok) {
                     try { sessionStorage.removeItem('roomKod'); } catch (e) {}
                     showLobby();
-                    if (!silent) setLobbyError((res && res.hata) || 'Odaya girilemedi.');
+                    if (silent === 'eslesme') setLobbyError('Eşleşme iptal edildi, tekrar dene.');
+                    else if (!silent) setLobbyError((res && res.hata) || 'Odaya girilemedi.');
                     return;
                 }
+                setQueueUI(false);
                 resetGameView();
-                currentRoom = { kod: res.kod, ad: res.ad };
+                matchOver = false;
+                currentRoom = { kod: res.kod, ad: res.ad, dereceli: !!res.dereceli };
                 try { sessionStorage.setItem('roomKod', res.kod); } catch (e) {}
-                document.getElementById('room-code-text').textContent = res.kod;
-                document.getElementById('room-chip').title = res.ad + ' – kodu kopyala';
+                document.getElementById('room-code-text').textContent = res.dereceli ? 'DERECELİ' : res.kod;
+                document.getElementById('room-chip').title = res.dereceli ? 'Dereceli maç' : res.ad + ' – kodu kopyala';
+                show('btn-reset', !res.dereceli);
                 document.getElementById('room-code-input').value = '';
                 showGame();
             });
@@ -930,10 +977,10 @@
             if (!socket) return;
             const btn = document.getElementById('btn-leave');
             // Oyuncuysan yanlışlıkla çıkmamak için iki tıklama iste
-            if (myColor !== null && !isGameOver() && !leaveArmed) {
+            if (myColor !== null && !isGameOver() && !matchOver && !leaveArmed) {
                 leaveArmed = true;
                 btn.classList.add('bg-red-800');
-                btn.title = 'Emin misin? Tekrar tıkla';
+                btn.title = (currentRoom && currentRoom.dereceli) ? 'Dereceli maç! Çıkarsan mağlup sayılırsın. Tekrar tıkla' : 'Emin misin? Tekrar tıkla';
                 setTimeout(() => {
                     leaveArmed = false;
                     btn.classList.remove('bg-red-800');
@@ -950,7 +997,7 @@
         }
 
         function copyRoomCode() {
-            if (!currentRoom) return;
+            if (!currentRoom || currentRoom.dereceli) return;
             const el = document.getElementById('room-code-text');
             const done = () => {
                 el.textContent = 'Kopyalandı';
@@ -1023,6 +1070,14 @@
             if (!myAccount) { chip.style.display = 'none'; return; }
             document.getElementById('acc-name').textContent = myAccount.username;
             document.getElementById('acc-gold').textContent = '🪙 ' + myAccount.gold;
+            const pu = myAccount.puan;
+            const accPuan = document.getElementById('acc-puan');
+            accPuan.textContent = pu ? '⚔ ' + pu.rating : '';
+            accPuan.title = pu ? rankName(pu.rating) : '';
+            const line = document.getElementById('my-rank-line');
+            if (line) line.textContent = pu
+                ? 'Puanın: ' + pu.rating + ' · ' + rankName(pu.rating) + '  (' + pu.wins + ' galibiyet / ' + pu.losses + ' mağlubiyet)'
+                : '';
             chip.style.display = 'flex';
         }
 
@@ -1040,6 +1095,135 @@
             location.reload();
         }
 
+        /* ------------------------------ Elo / Dereceli ------------------------------ */
+        let matchOver = false;
+        let queueTimer = null, queueSince = 0;
+
+        function rankName(r) {
+            if (r >= 1400) return 'Efsane';
+            if (r >= 1200) return 'Üstat';
+            if (r >= 1050) return 'Usta';
+            return 'Çaylak';
+        }
+
+        function applyPuanlar(p) {
+            const set = (id, v) => {
+                const el = document.getElementById(id);
+                el.textContent = v != null ? '⚔ ' + v : '';
+                el.title = v != null ? rankName(v) : '';
+            };
+            set('p1-puan', p[1]);
+            set('p2-puan', p['-1']);
+        }
+
+        function onMatchResult(m) {
+            matchOver = true;
+            const win = m.sonuc === 'kazandi';
+            let line;
+            if (m.sayildi) {
+                line = '⚔ ' + (m.delta > 0 ? '+' : '') + m.delta + ' puan  →  ' + m.puan + ' · ' + rankName(m.puan);
+            } else if (m.sebep === 'kisa') {
+                line = 'Maç çok kısa sürdüğü için puanı etkilemedi.';
+            } else {
+                line = 'Bu rakiple günlük dereceli maç sınırı dolduğu için puanı etkilemedi.';
+            }
+            document.getElementById('win-elo').textContent = line;
+            if (m.neden === 'terk') {
+                // Oyun bitmedi, rakip ayrıldı: sonucu kendimiz gösteriyoruz
+                document.getElementById('win-text').textContent = win
+                    ? 'Rakibin maçı terk etti, maçı sen kazandın!'
+                    : 'Maçı terk ettin.';
+                document.getElementById('win-gold').textContent = '';
+                configureWinButton();
+                document.getElementById('win-modal').classList.remove('hidden');
+            }
+        }
+
+        function setQueueUI(on) {
+            show('queue-idle', !on);
+            show('queue-busy', on);
+            clearInterval(queueTimer);
+            if (on) {
+                queueSince = Date.now();
+                updateQueueTimer();
+                queueTimer = setInterval(updateQueueTimer, 1000);
+            }
+        }
+
+        function updateQueueTimer() {
+            const sec = Math.floor((Date.now() - queueSince) / 1000);
+            document.getElementById('queue-time').textContent = Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+            document.getElementById('queue-hint').textContent =
+                sec < 30 ? 'Puanı sana yakın oyuncular aranıyor…'
+                : sec < 90 ? 'Bulunamadı, arama aralığı genişliyor…'
+                : 'Şu an uygun rakip yok gibi görünüyor. Beklemeye devam edebilir ya da dostluk odası kurabilirsin.';
+        }
+
+        function startQueue() {
+            if (!socket) return;
+            setLobbyError('');
+            socket.emit('esles-ara', (res) => {
+                if (!res || !res.ok) { setLobbyError((res && res.hata) || 'Kuyruğa girilemedi.'); return; }
+                setQueueUI(true);
+            });
+        }
+
+        function cancelQueue() {
+            if (socket) socket.emit('esles-iptal', () => {});
+            setQueueUI(false);
+        }
+
+        async function loadLeaderboard() {
+            if (!authToken) return;
+            try {
+                const r = await fetch('/api/liderlik', { headers: { 'Authorization': 'Bearer ' + authToken } });
+                const d = await r.json();
+                if (r.ok) renderLeaderboard(d.liste);
+            } catch (e) {}
+        }
+
+        function renderLeaderboard(list) {
+            const box = document.getElementById('leaderboard');
+            box.innerHTML = '';
+            if (!list || list.length === 0) {
+                const p = document.createElement('p');
+                p.className = 'text-xs italic text-gray-500 text-center py-3';
+                p.textContent = 'Henüz dereceli maç oynanmadı. İlk sıraya sen yerleş!';
+                box.appendChild(p);
+                return;
+            }
+            const medals = ['🥇', '🥈', '🥉'];
+            list.forEach((x, i) => {
+                const me = myAccount && x.username === myAccount.username;
+                const row = document.createElement('div');
+                row.className = 'flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs ' +
+                    (me ? 'bg-amber-700/30 border border-amber-500/40' : 'bg-stone-900/60 border border-amber-900/20');
+
+                const pos = document.createElement('span');
+                pos.className = 'w-6 text-center font-bold text-amber-300';
+                pos.textContent = medals[i] || (i + 1);
+
+                const name = document.createElement('span');
+                name.className = 'flex-1 min-w-0 truncate font-semibold text-amber-100';
+                name.textContent = x.username;
+                const rank = document.createElement('span');
+                rank.className = 'ml-2 text-[10px] text-amber-200/60';
+                rank.textContent = rankName(x.rating);
+                name.appendChild(rank);
+
+                const pts = document.createElement('span');
+                pts.className = 'font-bold text-amber-300';
+                pts.textContent = x.rating;
+
+                const gm = document.createElement('span');
+                gm.className = 'w-20 text-right text-gray-400';
+                gm.textContent = 'G ' + x.wins + ' · M ' + x.losses;
+
+                row.appendChild(pos); row.appendChild(name); row.appendChild(pts); row.appendChild(gm);
+                box.appendChild(row);
+            });
+        }
+
         function applyGold(g) {
             document.getElementById('p1-gold').textContent = g[1] != null ? '🪙 ' + g[1] : '';
             document.getElementById('p2-gold').textContent = g['-1'] != null ? '🪙 ' + g['-1'] : '';
@@ -1047,15 +1231,28 @@
 
         function isGameOver() { return off.p1 === 15 || off.p2 === 15; }
 
+        function configureWinButton() {
+            const btn = document.getElementById('win-btn');
+            if (currentRoom && currentRoom.dereceli) {
+                btn.textContent = 'LOBİYE DÖN';
+                btn.onclick = () => leaveRoom();
+            } else {
+                btn.textContent = 'YENİ OYUN';
+                btn.onclick = () => initGame(true);
+            }
+        }
+
         function showWin() {
             const w = off.p1 === 15 ? 1 : -1;
             document.getElementById('win-text').textContent = pname(w) + ' oyunu kazandı!';
+            configureWinButton();
             document.getElementById('win-modal').classList.remove('hidden');
         }
 
         function hideWin() {
             document.getElementById('win-modal').classList.add('hidden');
             document.getElementById('win-gold').textContent = '';
+            document.getElementById('win-elo').textContent = '';
         }
 
         function canAct() { return !isGameOver() && (!socket || myColor === turn); }
