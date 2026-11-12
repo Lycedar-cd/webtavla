@@ -71,6 +71,139 @@ app.use(express.json({ limit: '2kb' }));
 // Sadece oyun sayfası dışarı açılır (server.js vb. görünmez)
 app.get(['/', '/index.html'], (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
+/* ------------------------- PWA: iPhone'a uygulama gibi kurulum ------------------------- */
+// İkonlar sunucuda koddan çizilir (ek dosya yüklemek gerekmez). iPhone SVG ikon kabul etmediği için PNG üretilir.
+
+const crcTable = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+        t[n] = c >>> 0;
+    }
+    return t;
+})();
+function crc32(buf) {
+    let c = 0xffffffff;
+    for (let i = 0; i < buf.length; i++) c = crcTable[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+}
+function pngChunk(type, data) {
+    const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
+    const td = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+    const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(td));
+    return Buffer.concat([len, td, crc]);
+}
+function encodePng(size, rgb) {
+    const raw = Buffer.alloc((size * 3 + 1) * size);
+    for (let y = 0; y < size; y++) {
+        raw[y * (size * 3 + 1)] = 0; // filtre yok
+        rgb.copy(raw, y * (size * 3 + 1) + 1, y * size * 3, (y + 1) * size * 3);
+    }
+    const ihdr = Buffer.alloc(13);
+    ihdr.writeUInt32BE(size, 0); ihdr.writeUInt32BE(size, 4);
+    ihdr[8] = 8; ihdr[9] = 2; // 8 bit, RGB
+    return Buffer.concat([
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+        pngChunk('IHDR', ihdr),
+        pngChunk('IDAT', require('zlib').deflateSync(raw, { level: 9 })),
+        pngChunk('IEND', Buffer.alloc(0))
+    ]);
+}
+
+// Zar: kahverengi zemin, krem renkli altın çerçeveli zar, beş nokta. scale: zarın ikona oranı
+function renderDice(size, scale) {
+    const ss = size > 256 ? 2 : 3; // kenar yumuşatma
+    const rgb = Buffer.alloc(size * size * 3);
+    const h = scale / 2, r = h * 0.28, border = h * 0.075;
+    const dotR = h * 0.13, off = h * 0.5;
+    const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+    const colorAt = (x, y) => {
+        const dx = x - 0.5, dy = y - 0.5;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        let col = mix([0x2c, 0x1d, 0x11], [0x0f, 0x0a, 0x06], Math.min(1, dist / 0.75)); // arka plan
+        const qx = Math.abs(dx) - (h - r), qy = Math.abs(dy) - (h - r);
+        const d = Math.sqrt(Math.max(qx, 0) ** 2 + Math.max(qy, 0) ** 2) + Math.min(Math.max(qx, qy), 0) - r;
+        if (d <= 0) {
+            col = d > -border ? [0xb8, 0x86, 0x0b] : mix([0xff, 0xfb, 0xee], [0xe8, 0xdf, 0xc8], Math.min(1, (dx + dy + 2 * h) / (4 * h)));
+            for (const [sx, sy] of [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]]) {
+                if ((dx - sx * off) ** 2 + (dy - sy * off) ** 2 <= dotR * dotR) col = [0x22, 0x22, 0x22];
+            }
+        }
+        return col;
+    };
+    for (let py = 0; py < size; py++) {
+        for (let px = 0; px < size; px++) {
+            let R = 0, G = 0, B = 0;
+            for (let i = 0; i < ss; i++) for (let j = 0; j < ss; j++) {
+                const c = colorAt((px + (i + 0.5) / ss) / size, (py + (j + 0.5) / ss) / size);
+                R += c[0]; G += c[1]; B += c[2];
+            }
+            const n = ss * ss, o = (py * size + px) * 3;
+            rgb[o] = Math.round(R / n); rgb[o + 1] = Math.round(G / n); rgb[o + 2] = Math.round(B / n);
+        }
+    }
+    return encodePng(size, rgb);
+}
+
+const iconCache = {};
+function sendIcon(res, key, size, scale) {
+    if (!iconCache[key]) iconCache[key] = renderDice(size, scale);
+    res.set({ 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
+    res.send(iconCache[key]);
+}
+app.get('/apple-touch-icon.png', (req, res) => sendIcon(res, 'apple', 180, 0.66));
+app.get('/icon-192.png', (req, res) => sendIcon(res, 'i192', 192, 0.66));
+app.get('/icon-512.png', (req, res) => sendIcon(res, 'i512', 512, 0.66));
+app.get('/icon-maskable-512.png', (req, res) => sendIcon(res, 'mask512', 512, 0.5)); // kenarlardan kesilse de zar görünsün
+
+app.get('/manifest.webmanifest', (req, res) => {
+    res.set({ 'Content-Type': 'application/manifest+json; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
+    res.send(JSON.stringify({
+        name: 'Geleneksel Tavla',
+        short_name: 'Tavla',
+        description: 'Online tavla oyunu',
+        lang: 'tr',
+        start_url: '/',
+        scope: '/',
+        display: 'standalone',
+        background_color: '#0f0a06',
+        theme_color: '#0f0a06',
+        icons: [
+            { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+            { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+            { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+        ]
+    }));
+});
+
+// Bağlantı yoksa boş sayfa yerine düzgün bir uyarı göster. Önbellek tutmaz, eski sürüm sorunu çıkmaz.
+const OFFLINE_HTML = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Bağlantı yok</title>' +
+    '<style>body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;' +
+    'background:#0f0a06;color:#f3e5ab;font-family:-apple-system,system-ui,sans-serif;text-align:center;padding:24px}' +
+    'h1{font-size:22px;margin:12px 0 6px}p{opacity:.7;font-size:14px;margin:0 0 20px}' +
+    'button{background:#b45309;color:#fff;border:0;border-radius:12px;padding:12px 28px;font-size:16px;font-weight:700}</style></head>' +
+    '<body><div style="font-size:56px">🎲</div><h1>Bağlantı yok</h1>' +
+    '<p>İnternetini kontrol edip tekrar dene.</p><button onclick="location.reload()">Tekrar dene</button></body></html>';
+const SW_JS = [
+    "self.addEventListener('install', () => self.skipWaiting());",
+    "self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));",
+    'const OFFLINE = ' + JSON.stringify(OFFLINE_HTML) + ';',
+    "self.addEventListener('fetch', (event) => {",
+    "    if (event.request.mode !== 'navigate') return;",
+    "    event.respondWith(fetch(event.request).catch(() => new Response(OFFLINE, {",
+    "        status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' }",
+    '    })));',
+    '});'
+].join('\n');
+app.get('/sw.js', (req, res) => {
+    res.set({ 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/' });
+    res.send(SW_JS);
+});
+
+
+
 /* ---------------------------- Hesap sistemi ---------------------------- */
 
 const attempts = new Map();

@@ -2,8 +2,15 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#0f0a06">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="Tavla">
+    <meta name="format-detection" content="telephone=no">
     <title>Gerçekçi Web Tavla Oyunu</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,
     <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>
@@ -35,6 +42,11 @@
         }
         html { -webkit-text-size-adjust: 100%; }
         body { min-height: 100dvh !important; }
+
+        /* Uygulama hissi: sayfa lastik gibi esnemesin, uzun basınca menü çıkmasın, yazı kutuları iPhone'da çalışsın */
+        html, body { overscroll-behavior: none; }
+        body { -webkit-touch-callout: none; -webkit-text-size-adjust: 100%; }
+        input, textarea { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
         .title-font { font-family: 'Cinzel', serif; }
 
         /* Tailwind'de grid-cols-13 yok, elle tanımlandı */
@@ -338,6 +350,17 @@
             </button>
         </div>
 
+        <div id="install-hint" class="hidden max-w-xl mx-auto mb-4 bg-amber-900/30 border border-amber-600/40 rounded-xl px-4 py-3 text-xs text-amber-100">
+            <div class="flex items-start gap-3">
+                <span class="text-xl leading-none">📲</span>
+                <div class="flex-1">
+                    <p class="font-semibold text-amber-200 mb-1">Uygulama gibi kur</p>
+                    <p class="text-amber-100/80">Safari'de altta <b>Paylaş</b> düğmesine (kare ve yukarı ok) dokun, sonra <b>Ana Ekrana Ekle</b>'yi seç. Oyun tam ekran açılır.</p>
+                </div>
+                <button onclick="dismissInstallHint()" title="Kapat" class="text-amber-200/70 hover:text-amber-200 text-lg leading-none">✕</button>
+            </div>
+        </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-[250px_minmax(0,1fr)_250px] gap-4 items-start">
             <!-- Sol: liderlik tablosu -->
             <aside class="order-3 lg:order-1">
@@ -528,7 +551,7 @@
             socket.on('connect', () => {
                 setQueueUI(false);
                 let kod = null;
-                try { kod = sessionStorage.getItem('roomKod'); } catch (e) {}
+                kod = getSavedRoom();
                 if (kod) joinRoom(kod, true); else showLobby();
             });
             socket.on('hesap', (a) => { myAccount = a; renderAccount(); applyMyBoard(a); });
@@ -537,7 +560,7 @@
             socket.on('eslesti', (k) => { setQueueUI(false); joinRoom(k.kod, 'eslesme'); });
             socket.on('kuyruk-iptal', () => setQueueUI(false));
             socket.on('mac-iptal', (m) => {
-                try { sessionStorage.removeItem('roomKod'); } catch (e) {}
+                clearSavedRoom();
                 resetGameView();
                 showLobby();
                 setLobbyError(m && m.neden === 'rakip-ayrildi'
@@ -853,6 +876,72 @@
             }
         }
 
+        /* --------------------------- Uygulama (PWA) --------------------------- */
+        function isStandalone() {
+            return window.navigator.standalone === true ||
+                (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+        }
+        function isIOS() {
+            return /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        }
+
+        // Sekme içinde oda hafızası sessionStorage'da. Kurulu uygulamada ayrıca kalıcı saklanır,
+        // böylece iPhone uygulamayı arka planda kapatsa da oyuncu aynı odaya döner.
+        function getSavedRoom() {
+            try {
+                return sessionStorage.getItem('roomKod') || (isStandalone() ? localStorage.getItem('roomKodPwa') : null);
+            } catch (e) { return null; }
+        }
+        function setSavedRoom(kod) {
+            try {
+                sessionStorage.setItem('roomKod', kod);
+                if (isStandalone()) localStorage.setItem('roomKodPwa', kod);
+            } catch (e) {}
+        }
+        function clearSavedRoom() {
+            try {
+                sessionStorage.removeItem('roomKod');
+                localStorage.removeItem('roomKodPwa');
+            } catch (e) {}
+        }
+
+        function initInstallHint() {
+            let dismissed = false;
+            try { dismissed = localStorage.getItem('installHintDismissed') === '1'; } catch (e) {}
+            if (isIOS() && !isStandalone() && !dismissed) show('install-hint', true);
+        }
+        function dismissInstallHint() {
+            try { localStorage.setItem('installHintDismissed', '1'); } catch (e) {}
+            show('install-hint', false);
+        }
+
+        // Oyun sırasında ekran kararmasın
+        let wakeLock = null;
+        async function keepAwake(on) {
+            try {
+                if (on && 'wakeLock' in navigator && !wakeLock) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    wakeLock.addEventListener('release', () => { wakeLock = null; });
+                } else if (!on && wakeLock) {
+                    await wakeLock.release();
+                    wakeLock = null;
+                }
+            } catch (e) { wakeLock = null; }
+        }
+
+        // Uygulamaya geri dönülünce: ekran kilidini yenile, bağlantı koptuysa hemen bağlan
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState !== 'visible') return;
+            if (currentRoom) keepAwake(true);
+            if (socket && authToken && !socket.connected) socket.connect();
+        });
+
+        // Servis çalışanı: bağlantı yokken boş sayfa yerine uyarı gösterir
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); });
+        }
+
         /* ------------------------------ Odalar ------------------------------ */
         let currentRoom = null;
 
@@ -862,6 +951,7 @@
 
         function showLobby() {
             currentRoom = null;
+            keepAwake(false);
             show('lobby-view', true);
             show('game-view', false);
             show('header-players', false);
@@ -874,6 +964,7 @@
         }
 
         function showGame() {
+            keepAwake(true);
             show('lobby-view', false);
             show('game-view', true);
             show('header-players', true);
@@ -978,7 +1069,7 @@
             if (!socket) return;
             socket.emit('oda-katil', { kod }, (res) => {
                 if (!res || !res.ok) {
-                    try { sessionStorage.removeItem('roomKod'); } catch (e) {}
+                    clearSavedRoom();
                     showLobby();
                     if (silent === 'eslesme') setLobbyError('Eşleşme iptal edildi, tekrar dene.');
                     else if (!silent) setLobbyError((res && res.hata) || 'Odaya girilemedi.');
@@ -988,7 +1079,7 @@
                 resetGameView();
                 matchOver = false;
                 currentRoom = { kod: res.kod, ad: res.ad, dereceli: !!res.dereceli };
-                try { sessionStorage.setItem('roomKod', res.kod); } catch (e) {}
+                setSavedRoom(res.kod);
                 document.getElementById('room-code-text').textContent = res.dereceli ? 'DERECELİ' : res.kod;
                 document.getElementById('room-chip').title = res.dereceli ? 'Dereceli maç' : res.ad + ' – kodu kopyala';
                 show('btn-reset', !res.dereceli);
@@ -1016,7 +1107,7 @@
             leaveArmed = false;
             btn.classList.remove('bg-red-800');
             socket.emit('oda-ayril', () => {});
-            try { sessionStorage.removeItem('roomKod'); } catch (e) {}
+            clearSavedRoom();
             resetGameView();
             showLobby();
         }
@@ -1116,7 +1207,7 @@
                 });
             } catch (e) {}
             try { localStorage.removeItem('authToken'); } catch (e) {}
-            try { sessionStorage.removeItem('roomKod'); } catch (e) {}
+            clearSavedRoom();
             location.reload();
         }
 
@@ -1814,6 +1905,7 @@
         buildEmojiPanel();
         initGame(false);
         if (!socket) showGame();
+        initInstallHint();
         if (socket && !authToken) showAuthModal();
     </script>
 </body>
